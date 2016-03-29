@@ -3,9 +3,12 @@
 #include <iostream>
 #include <utility>
 
+#include <sched.h>
+
 #include <pin.H>
 
 #include "manager.h"
+#include "buffer.h"
 
 KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
     "o", "data.db", "specify output file name");
@@ -16,6 +19,8 @@ KNOB<string> KnobInputFile(KNOB_MODE_WRITEONCE, "pintool",
 KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
     "f", "filter.yaml", "specify filter file name");
 
+BUFFER_ID bufId;
+
 VOID ImageLoad(IMG img, VOID *v)
 {
     Manager* manager = (Manager*)v;
@@ -25,8 +30,6 @@ VOID ImageLoad(IMG img, VOID *v)
     string file;
     string image = IMG_Name(img);
     ADDRINT address;
-
-    fprintf(stderr, "Processing %s\n", image.c_str());
 
     if(manager->filter.isImageFiltered(image))
         return;
@@ -70,11 +73,14 @@ VOID ImageLoad(IMG img, VOID *v)
                 location.column = column;
 
                 if(file.length() > 0) {
-                    auto it = manager->sourceLocationTagMap.find(location);
-                    if (it != manager->sourceLocationTagMap.end()) {
-                        Tag tag = it->second;
-
-                        // TODO instrument
+                    auto it = manager->sourceLocationTagIdMap.find(location);
+                    if (it != manager->sourceLocationTagIdMap.end()) {
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
+                             IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
+                             IARG_TSC, offsetof(struct BufferEntry, tsc),
+                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
+                             IARG_END);
                     }
                 }
             }
@@ -100,18 +106,53 @@ VOID Fini(INT32 code, VOID *v)
     delete manager;
 }
 
+VOID * BufferFull(BUFFER_ID, THREADID tid, const CONTEXT *, void *buffer,
+                  UINT64 n, VOID *v)
+{
+    Manager* manager = (Manager*)v;
+
+    struct BufferEntry* entries = (struct BufferEntry*) buffer;
+
+    manager->bufferFull(entries, n, tid );
+
+    return buffer;
+}
+
+VOID ThreadStart(THREADID threadid, CONTEXT *, INT32, VOID *v)
+{
+    cpu_set_t my_set;
+    CPU_ZERO(&my_set);
+    CPU_SET(sched_getcpu(), &my_set);
+    sched_setaffinity(0, sizeof(cpu_set_t), &my_set);
+
+
+    Manager* manager = (Manager*)v;
+
+    manager->setUpThreadManager(threadid);
+}
+
+VOID ThreadFini(THREADID threadid, const CONTEXT *, INT32, VOID *v)
+{
+    Manager* manager = (Manager*)v;
+
+    manager->tearDownThreadManager(threadid);
+}
 
 int main(int argc, char * argv[])
 {
-    // prepare for image instrumentation mode
     PIN_InitSymbols();
 
     Manager* manager = new Manager(KnobOutputFile.Value(), KnobInputFile.Value(), KnobFilterFile.Value());
 
     if (PIN_Init(argc, argv)) return Usage();
 
+    bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 100,
+                BufferFull, (void*)manager);
+
     IMG_AddInstrumentFunction(ImageLoad, (void*)manager);
     PIN_AddFiniFunction(Fini, (void*)manager);
+    PIN_AddThreadStartFunction(ThreadStart, (void*)manager);
+    PIN_AddThreadFiniFunction(ThreadFini, (void*)manager);
 
     PIN_StartProgram();
 

@@ -7,9 +7,13 @@
 
 #include <pin.H>
 
+class Manager;
+
 #include "sqlwriter.h"
 #include "entities.h"
 #include "filter.h"
+#include "buffer.h"
+#include "threadmanager.h"
 
 class Manager
 {
@@ -19,10 +23,29 @@ public:
     SQLWriter writer;
     Filter filter;
 
-    std::vector<Tag> tags;
-    std::map<SourceLocation, Tag> sourceLocationTagMap;
-private:
+    std::map<SourceLocation, int> sourceLocationTagIdMap;
 
+    std::vector<Tag> tags;
+    std::map<int, Tag> tagIdTagMap;
+    std::map<int, int> simpleTagInstanceMap;
+
+    void bufferFull(struct BufferEntry*, UINT64, THREADID);
+
+    void setUpThreadManager(THREADID);
+    void tearDownThreadManager(THREADID);
+private:
+    /* Called in constructor */
+    void loadTags(const std::string& file);
+    void writeTags();
+    void loadSourceLocationTagIdMap();
+    void loadTagIdTagMap();
+
+    std::map<THREADID, ThreadManager> threadmanagers;
+
+    void lock();
+    void unlock();
+
+    PIN_MUTEX mutex;
 };
 
 #endif // MANAGER_H

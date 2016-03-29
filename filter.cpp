@@ -5,16 +5,18 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include "exception.h"
+
 Filter::Filter(std::string file)
 {
     YAML::Node filter = YAML::LoadFile(file);
 
     if(!filter.IsMap())
-        throw std::invalid_argument("Filter file should be a map");
+        YAMLException(file, "Filter file should be a map");
 
     for (auto it : filter) {
         if(!it.second.IsMap())
-            throw std::invalid_argument("Filter file should be a map of maps");
+            YAMLException(file, "Filter file should be a map of maps");
 
         std::string name = it.first.as<std::string>();
 
@@ -24,7 +26,7 @@ Filter::Filter(std::string file)
 
         if (it.second["include"]) {
             if(!it.second["include"].IsSequence())
-                throw std::invalid_argument("'include' should be a sequence");
+                YAMLException(file, "'include' should be a sequence");
 
             for (auto it2 : it.second["include"]) {
                 std::cout << it2.as<std::string>() << std::endl;
@@ -37,7 +39,7 @@ Filter::Filter(std::string file)
 
         if (it.second["exclude"]) {
             if(!it.second["exclude"].IsSequence())
-                throw std::invalid_argument("'exclude' should be a sequence");
+                YAMLException(file, "'exclude' should be a sequence");
 
 
             for (auto it2 : it.second["exclude"]) {

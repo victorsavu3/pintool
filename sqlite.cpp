@@ -5,36 +5,9 @@
 
 #include <sqlite3.h>
 
+#include "exception.h"
+
 namespace SQLite {
-
-SQLiteException::SQLiteException(Connection* db, int error_code)
-{
-    this->error_code = error_code;
-    this->error_message = db->getErrorMessage();
-
-    std::ostringstream stream;
-
-    stream << "SQLite error" << std::endl << "Code: " << error_code << std::endl << "Message: " << this->error_message;
-
-    this->msg = stream.str();
-}
-
-SQLiteException::SQLiteException(const char* err, int error_code)
-{
-    this->error_code = error_code;
-    this->error_message = err;
-
-    std::ostringstream stream;
-
-    stream << "SQLite error" << std::endl << "Code: " << error_code << std::endl << "Message: " << this->error_message;
-
-    this->msg = stream.str();
-}
-
-const char *SQLiteException::what() const noexcept
-{
-    return msg.c_str();
-}
 
 Connection::Connection(const char * location, bool forceCreate) {
     if (forceCreate) {
@@ -45,7 +18,7 @@ Connection::Connection(const char * location, bool forceCreate) {
 
     int code;
     if (code = sqlite3_open_v2(location, &this->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_CREATE, NULL) != SQLITE_OK)
-        throw SQLiteException(this, code);
+        SQLiteException(this, code, "Connection constructor");
 
     PIN_MutexInit(&mutex);
 }
@@ -53,7 +26,7 @@ Connection::Connection(const char * location, bool forceCreate) {
 Connection::~Connection() {
     int code;
     if (code = sqlite3_close(this->db) != SQLITE_OK)
-        throw SQLiteException(this, code);
+        SQLiteException(this, code, "Connection destructor");
 
     PIN_MutexFini(&mutex);
 }
@@ -77,7 +50,7 @@ void Connection::execute(const char *sql)
 
     char* err;
     if (int code = sqlite3_exec(this->db, sql, NULL, NULL, &err) != SQLITE_OK) {
-        throw SQLiteException(err, code);
+        SQLiteException(err, code, "execute");
     }
 
     unlock();
@@ -98,7 +71,7 @@ Statement::Statement(std::shared_ptr<Connection> connection, const char* sql) : 
 
     int code;
     if  (code = sqlite3_prepare_v2(connection->db, sql, -1, &this->stmt, NULL) != SQLITE_OK) {
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "Statemenet constructor");
     }
 
     connection->unlock();
@@ -108,7 +81,7 @@ Statement::~Statement() {
     connection->lock();
 
     if (int code = sqlite3_finalize(this->stmt) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+         SQLiteException(this->connection.get(), code, "Statemenet destructor");
 
     connection->unlock();
 }
@@ -117,7 +90,7 @@ void Statement::bind(int pos, int64_t val) {
     connection->lock();
 
     if (int code = sqlite3_bind_int64(this->stmt, pos, (sqlite3_int64)val) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "bind int64_t");
 
     connection->unlock();
 }
@@ -126,7 +99,7 @@ void Statement::bind(int pos, int val ) {
     connection->lock();
 
     if (int code = sqlite3_bind_int(this->stmt, pos, val) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "bind int");
 
     connection->unlock();
 }
@@ -135,7 +108,7 @@ void Statement::bind(int pos, const std::string& val) {
     connection->lock();
 
     if (int code = sqlite3_bind_text(this->stmt, pos, val.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "bind std::string");
 
     connection->unlock();
 }
@@ -144,7 +117,7 @@ void Statement::bind(int pos, const char* val) {
     connection->lock();
 
     if (int code = sqlite3_bind_text(this->stmt, pos, val, -1, SQLITE_TRANSIENT) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "bind char*");
 
     connection->unlock();
 }
@@ -226,17 +199,17 @@ bool Statement::stepRow()
 
 void Statement::resetUnlocked() {
     if (int code = sqlite3_reset(this->stmt) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "reset");
 }
 
 void Statement::clearBindingsUnlocked() {
     if (int code = sqlite3_clear_bindings(this->stmt) != SQLITE_OK)
-        throw SQLiteException(this->connection.get(), code);
+       SQLiteException(this->connection.get(), code, "clearBindings");
 }
 
 void Statement::stepUnlocked() {
     if (int code = sqlite3_step(this->stmt) != SQLITE_DONE)
-        throw SQLiteException(this->connection.get(), code);
+        SQLiteException(this->connection.get(), code, "stepUnlocked");
 }
 
 bool Statement::stepRowUnlocked()
@@ -247,11 +220,7 @@ bool Statement::stepRowUnlocked()
     else if (code == SQLITE_DONE)
         return false;
     else
-        throw SQLiteException(this->connection.get(), code);
-}
-
-StatementBinder::StatementBinder(std::shared_ptr<Statement> stmt) : stmt(stmt) {
-    this->at = 1;
+        SQLiteException(this->connection.get(), code, "stepRow");
 }
 
 }

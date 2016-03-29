@@ -4,8 +4,6 @@
 #include <string>
 #include <functional>
 
-enum TagType { EndTag, StartSimpleTag, StartCounterTag };
-
 class Image {
   public:
     int id;
@@ -39,11 +37,13 @@ class SourceLocation {
     int column;
 };
 
+enum TagType { EndTag, StartSimpleTag, StartCounterTag };
+
 class Tag {
   public:
     int id;
 
-    SourceLocation location;
+    int location;
     std::string name;
     TagType type;
 };

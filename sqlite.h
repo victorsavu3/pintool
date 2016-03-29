@@ -44,12 +44,16 @@ public:
     Statement(std::shared_ptr<Connection> connection, const char* sql);
     ~Statement();
 
+    void bind(int col, uint64_t val) { this->bind(col, (int64_t) val);}
     void bind(int, int64_t);
     void bind(int, int);
     void bind(int, const std::string&);
     void bind(int, const char*);
 
     int columnInt(int);
+    std::string columnString(int);
+
+    template <typename T> T column(int);
 
     void execute();
     int executeInsert();
@@ -69,10 +73,13 @@ private:
     std::shared_ptr<Connection> connection;
 };
 
+template <> inline int Statement::column<int>(int col) { return columnInt(col); }
+template <> inline std::string Statement::column<std::string>(int col) { return columnString(col); }
+
 class StatementBinder
 {
 public:
-    StatementBinder(std::shared_ptr<Statement>);
+    StatementBinder(std::shared_ptr<Statement> stmt) : stmt(stmt), at(1) {}
 
     template <typename T>
     StatementBinder& operator<<(const T& obj) {
@@ -103,18 +110,39 @@ StatementBinder operator<<(std::shared_ptr<Statement>& stmt, const T& obj) {
     return binder;
 }
 
-class SQLiteException: public std::exception {
+class StatementReader
+{
 public:
-    SQLiteException(Connection* db, int error_code);
-    SQLiteException(const char* err, int error_code);
+    StatementReader(std::shared_ptr<Statement>) : stmt(stmt), at(1) {}
 
-    virtual const char* what() const noexcept;
+    template <typename T>
+    StatementReader& operator>>(T& obj) {
+        obj = stmt->column<T>(at++);
+
+        return *this;
+    }
 private:
-    int error_code;
-    std::string error_message;
-    std::string msg;
+    int at;
+    std::shared_ptr<Statement> stmt;
 };
 
+template <typename T>
+StatementReader operator>>(Statement& stmt, T& obj) {
+    StatementReader reader(stmt.shared_from_this());
+
+    reader >> obj;
+
+    return reader;
+}
+
+template <typename T>
+StatementReader operator>>(std::shared_ptr<Statement>& stmt, T& obj) {
+    StatementReader reader(stmt);
+
+    reader >> obj;
+
+    return reader;
+}
 
 }
 #endif // CONNECTION_H

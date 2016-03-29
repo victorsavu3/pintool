@@ -1,6 +1,6 @@
 #include "sqlwriter.h"
 
-#include <iostream>
+#include "exception.h"
 
 SQLWriter::SQLWriter(const std::string& file, bool forceCreate) : db(std::make_shared<SQLite::Connection>(file.c_str(), forceCreate)) {
     PIN_MutexInit(&mutex);
@@ -21,9 +21,15 @@ void SQLWriter::prepareStatements() {
     this->insertFileStmt = this->db->makeStatement("INSERT INTO File(Path, Image) VALUES(?, ?);");
     this->insertFunctionStmt = this->db->makeStatement("INSERT INTO Function(Name, Prototype, File, Line) VALUES(?, ?, ?, ?);");
     this->insertSourceLocationStmt = this->db->makeStatement("INSERT INTO SourceLocation(Function, Line, Column) VALUES(?, ?, ?);");
+    this->insertTagStmt = this->db->makeStatement("INSERT INTO Tag(Name, Location, Type) VALUES(?, ?, ?);");
+
+    this->insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(Address, TSC, Tag) VALUES(?, ?, ?);");
+    this->insertSimpleTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Tag) VALUES(?);");
+    this->insertCounterTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Tag, Counter) VALUES(?, ?);");
 
     this->getFunctionIdByNameStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Prototype = ?");
     this->getSourceLocationIdStmt = this->db->makeStatement("SELECT Id FROM SourceLocation WHERE Function = ? AND Line = ? AND Column = ?");
+    this->getSourceLocationByIdStmt = this->db->makeStatement("SELECT Function, Line, Column FROM SourceLocation WHERE ID = ?");
 }
 
 
@@ -39,7 +45,9 @@ void SQLWriter::createDatabase() {
         "CREATE TABLE IF NOT EXISTS Function(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Name VARCHAR, Prototype VARCHAR, File INTEGER, Line INTEGER);"
         "CREATE TABLE IF NOT EXISTS SourceLocation(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Function INTEGER, Line INTEGER, Column INTEGER, UNIQUE(Function, Line, Column) ON CONFLICT IGNORE);"
         "CREATE TABLE IF NOT EXISTS Tag(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Name VARCHAR, Location INTEGER, Type INTEGER);"
-                );
+        "CREATE TABLE IF NOT EXISTS TagHit(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Address INTEGER, TSC INTEGER, Tag INTEGER)"
+        "CREATE TABLE IF NOT EXISTS TagInstance(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Counter INTEGER);"
+        );
 }
 
 void SQLWriter::lock()
@@ -92,6 +100,50 @@ void SQLWriter::insertSourceLocation(SourceLocation &location)
     unlock();
 }
 
+void SQLWriter::insertTag(Tag &tag)
+{
+    lock();
+
+    insertTagStmt << tag.name << tag.location << static_cast<int>(tag.type);
+    tag.id = insertSourceLocationStmt->executeInsert();
+
+    unlock();
+}
+
+void SQLWriter::insertTagHit(ADDRINT address, UINT64 tsc, int tagId)
+{
+    lock();
+
+    insertTagHitStmt << address << tsc << tagId;
+    insertTagHitStmt->execute();
+
+    unlock();
+}
+
+int SQLWriter::insertSimpleTagInstance(int tagId)
+{
+    lock();
+
+    insertSimpleTagInstanceStmt << tagId;
+    int id = insertSimpleTagInstanceStmt->executeInsert();
+
+    unlock();
+
+    return id;
+}
+
+int SQLWriter::insertCounterTagInstance(int tagId, int counter)
+{
+    lock();
+
+    insertSimpleTagInstanceStmt << tagId << counter;
+    int id = insertSimpleTagInstanceStmt->executeInsert();
+
+    unlock();
+
+    return id;
+}
+
 int SQLWriter::getFunctionIdByPrototype(const string &name)
 {
     lock();
@@ -104,9 +156,9 @@ int SQLWriter::getFunctionIdByPrototype(const string &name)
     }
 
     if (getFunctionIdByNameStmt->stepRow()) {
-        throw SQLWriterException("Too many rows returned in getFunctionIdByPrototype");
+        SQLWriterException("Too many rows returned", "getFunctionIdByPrototype");
     } else {
-        throw SQLWriterException("Could not find row in getFunctionIdByPrototype");
+        SQLWriterException("Could not find row", "getFunctionIdByPrototype");
     }
 
     getFunctionIdByNameStmt->reset();
@@ -127,11 +179,11 @@ int SQLWriter::getSourceLocationId(const SourceLocation &location)
     if (getSourceLocationIdStmt->stepRow()) {
         Id = getSourceLocationIdStmt->columnInt(0);
     } else {
-        throw SQLWriterException("Could not find row in setSourceLocationId");
+        SQLWriterException("Could not find row", "setSourceLocationId");
     }
 
     if (getSourceLocationIdStmt->stepRow()) {
-        throw SQLWriterException("Too many rows returned in setSourceLocationId");
+        SQLWriterException("Too many rows returned", "setSourceLocationId");
     }
 
     getSourceLocationIdStmt->reset();
@@ -147,12 +199,27 @@ void SQLWriter::setSourceLocationId(SourceLocation &location)
     location.id = getSourceLocationId(location);
 }
 
-
-SQLWriterException::SQLWriterException(const char *err) : msg(err)
+SourceLocation SQLWriter::getSourceLocationById(int id)
 {
-}
+    SourceLocation location;
 
-const char *SQLWriterException::what() const noexcept
-{
-    return msg.c_str();
+    lock();
+
+    getSourceLocationByIdStmt << id;
+    if (getSourceLocationByIdStmt->stepRow()) {
+        getSourceLocationIdStmt >> location.function >> location.line >> location.column;
+    } else {
+        SQLWriterException("Could not find row", "getSourceLocationById");
+    }
+
+    if (getSourceLocationIdStmt->stepRow()) {
+        SQLWriterException("Too many rows returned", "getSourceLocationById");
+    }
+
+    getSourceLocationIdStmt->reset();
+    getSourceLocationIdStmt->clearBindings();
+
+    unlock();
+
+    return location;
 }

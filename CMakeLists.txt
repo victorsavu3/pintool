@@ -65,9 +65,9 @@ set(PIN_LIBRARY_DIRS
 include_directories(${PIN_INCLUDE_DIRS})
 link_directories (${PIN_LIBRARY_DIRS})
 
-set(SRC_LIST_COMMON sqlwriter sqlite filter)
+set(SRC_LIST_COMMON sqlwriter sqlite filter exception)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
-set(SRC_LIST_DYNAMIC dynamic manager entities ${SRC_LIST_COMMON})
+set(SRC_LIST_DYNAMIC buffer dynamic manager entities threadmanager ${SRC_LIST_COMMON})
 
 add_library(${PROJECT_NAME}_static SHARED ${SRC_LIST_STATIC})
 add_library(${PROJECT_NAME}_dynamic SHARED ${SRC_LIST_DYNAMIC})
