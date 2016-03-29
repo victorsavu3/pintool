@@ -122,8 +122,22 @@ void Statement::bind(int pos, const char* val) {
     connection->unlock();
 }
 
+void Statement::checkColumn(int col)
+{
+    connection->lock();
+
+    int colCount = sqlite3_column_count(stmt);
+
+    if(colCount <= col)
+        SQLiteException("Request for column outside row", 0, "bind char*");
+
+    connection->unlock();
+}
+
 int Statement::columnInt(int col)
 {
+    checkColumn(col);
+
     connection->lock();
 
     int val = sqlite3_column_int(stmt, col);

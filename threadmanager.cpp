@@ -7,6 +7,8 @@
 
 ThreadManager::ThreadManager(Manager *manager, THREADID tid) : manager(manager), tid(tid)
 {
+    PIN_MutexInit(&mutex);
+
     startTSC = rdtsc();
     clock_gettime(CLOCK_REALTIME, &startTime);
 }
@@ -33,19 +35,29 @@ void ThreadManager::handleEntry(BufferEntry * entry)
     }
 }
 
-void ThreadManager::handleTag(ADDRINT instruction, UINT64 tsc, int tagId)
+void ThreadManager::handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructionId)
 {
-    if (tagId == lastTagHitId)
+    if (tagInstructionId == lastTagHitId)
         return;
 
-    tagId = lastTagHitId;
+    lastTagHitId = tagInstructionId;
 
-    manager->writer.insertTagHit(instruction, tsc, tagId);
+    manager->writer.insertTagHit(instruction, tsc, tagInstructionId);
 
-    Tag& tag = manager->tagIdTagMap[tagId];
+    TagInstruction& tagInstruction = manager->tagInstructionIdMap[tagInstructionId];
+    Tag& tag = manager->tagIdTagMap[tagInstruction.tag];
 
-    switch (tag.type) {
+    switch (tagInstruction.type) {
+        case TagInstructionType::Start:
+            tags.insert(tagInstruction.tag);
 
+            break;
+        case TagInstructionType::Stop:
+            tags.erase(tagInstruction.tag);
+
+            break;
+        default:
+            CorruptedBufferException("Invalid type for TagInstruction");
     }
 }
 

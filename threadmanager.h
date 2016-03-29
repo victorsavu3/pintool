@@ -23,7 +23,7 @@ private:
 
     void handleEntry(struct BufferEntry*);
 
-    void handleTag(ADDRINT instruction, UINT64 tsc, int tagId);
+    void handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructionId);
     int lastTagHitId;
     std::set<int> tags;
 

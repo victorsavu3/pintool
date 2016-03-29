@@ -37,15 +37,25 @@ class SourceLocation {
     int column;
 };
 
-enum TagType { EndTag, StartSimpleTag, StartCounterTag };
+enum TagType { Simple, Counter };
 
 class Tag {
   public:
     int id;
 
-    int location;
     std::string name;
     TagType type;
+};
+
+enum TagInstructionType { Start, Stop };
+
+class TagInstruction {
+public:
+    int id;
+
+    int location;
+    int tag;
+    TagInstructionType type;
 };
 
 namespace std {

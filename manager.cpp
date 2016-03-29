@@ -6,6 +6,8 @@
 
 Manager::Manager(const string &db, const string &source, const string &filter) : writer(db), filter(filter)
 {
+    PIN_MutexInit(&mutex);
+
     loadTags(source);
     writeTags();
     loadSourceLocationTagIdMap();
@@ -51,20 +53,15 @@ void Manager::loadTags(const string &file)
         YAML::Node tag = tags[i];
         Tag t;
 
+        t.id = i + 1;
+
         if(!tag.IsMap())
             YAMLException(file, "Tag element should be a map");
 
-        if (tag["name"]) {
-            if(!tag["name"].IsScalar())
-                YAMLException(file, "name should be a string");
+        if(!tag["name"].IsScalar())
+            YAMLException(file, "name should be a string");
 
-            t.name = tag["name"].as<std::string>();
-        }
-
-        if(!tag["location"].IsScalar())
-            YAMLException(file, "type should be a number");
-
-        t.location = tag["location"].as<int>();
+        t.name = tag["name"].as<std::string>();
 
 
         if(!tag["type"].IsScalar())
@@ -72,35 +69,69 @@ void Manager::loadTags(const string &file)
 
         std::string typeName = tag["type"].as<std::string>();
 
-        if (typeName == "EndTag") {
-            t.type = TagType::EndTag;
-        } else if (typeName == "StartSimpleTag") {
-            t.type = TagType::StartSimpleTag;
-        }  else if (typeName == "StartCounterTag") {
-            t.type = TagType::StartCounterTag;
+        if (typeName == "Simple") {
+            t.type = TagType::Simple;
+        } else if (typeName == "Counter") {
+            t.type = TagType::Counter;
+        } else {
+            YAMLException(file, "invalid tag type");
         }
 
         this->tags.push_back(t);
     }
+
+    YAML::Node tagInstructions = filter["tagInstructions"];
+
+    if(!tagInstructions.IsSequence())
+        YAMLException(file, "Source file should contain a sequence called 'tagInstructions'");
+
+    for (std::size_t i=0; i < tagInstructions.size(); i++) {
+        YAML::Node tagInstruction = tagInstructions[i];
+        TagInstruction t;
+
+        if(!tagInstruction["type"].IsScalar())
+            YAMLException(file, "type should be a string");
+
+        std::string typeName = tagInstruction["type"].as<std::string>();
+
+        if (typeName == "Start") {
+            t.type = TagInstructionType::Start;
+        } else if (typeName == "Stop") {
+            t.type = TagInstructionType::Stop;
+        } else {
+            YAMLException(file, "invalid tag instruction type");
+        }
+
+        if(!tagInstruction["location"].IsScalar())
+            YAMLException(file, "location should be a integer");
+
+        t.location = tagInstruction["location"].as<int>();
+
+        if(!tagInstruction["tag"].IsScalar())
+            YAMLException(file, "tag should be a integer");
+
+        t.tag = tagInstruction["tag"].as<int>();
+
+        this->tagInstructions.push_back(t);
+    }
+
 }
 
 void Manager::writeTags()
 {
     for (auto it : tags) {
         writer.insertTag(it);
+    }
 
-        if (it.type == TagType::StartSimpleTag) {
-            int id = writer.insertSimpleTagInstance(it.id);
-
-            simpleTagInstanceMap.insert(std::make_pair(it.id, id));
-        }
+    for (auto it : tagInstructions) {
+        writer.insertTagInstruction(it);
     }
 }
 
 void Manager::loadSourceLocationTagIdMap()
 {
-    for (auto it : tags)
-        sourceLocationTagIdMap.insert(std::make_pair(writer.getSourceLocationById(it.location), it.id));
+    for (auto it : tagInstructions)
+        sourceLocationTagInstructionIdMap.insert(std::make_pair(writer.getSourceLocationById(it.location), it.id));
 }
 
 void Manager::loadTagIdTagMap()

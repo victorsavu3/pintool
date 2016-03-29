@@ -22,10 +22,9 @@ public:
     void insertFunction(Function&);
     void insertSourceLocation(SourceLocation&);
     void insertTag(Tag&);
+    void insertTagInstruction(TagInstruction&);
 
     void insertTagHit(ADDRINT address, UINT64 tsc, int tagId);
-    int insertSimpleTagInstance(int);
-    int insertCounterTagInstance(int, int);
 
     int getFunctionIdByPrototype(const std::string& name);
     int getSourceLocationId(const SourceLocation& location);
@@ -45,8 +44,7 @@ private:
     std::shared_ptr<SQLite::Statement> insertTagStmt;
 
     std::shared_ptr<SQLite::Statement> insertTagHitStmt;
-    std::shared_ptr<SQLite::Statement> insertSimpleTagInstanceStmt;
-    std::shared_ptr<SQLite::Statement> insertCounterTagInstanceStmt;
+    std::shared_ptr<SQLite::Statement> insertTagInstructionStmt;
 
     std::shared_ptr<SQLite::Statement> getFunctionIdByNameStmt;
     std::shared_ptr<SQLite::Statement> getSourceLocationIdStmt;

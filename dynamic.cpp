@@ -21,6 +21,22 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 
 BUFFER_ID bufId;
 
+void do_entry(UINT32 type, ADDRINT instr, UINT64 tsc, UINT32 tagId, THREADID tid, VOID* v) {
+    std::cerr << "called" << std::endl;
+
+    struct BufferEntry entry;
+
+    entry.type = static_cast<BuferEntryType>(type);
+    entry.instruction = instr;
+    entry.tsc = tsc;
+
+    entry.data.tag.tagId = tagId;
+
+    Manager* manager = (Manager*)v;
+
+    manager->bufferFull(&entry, 1, tid);
+}
+
 VOID ImageLoad(IMG img, VOID *v)
 {
     Manager* manager = (Manager*)v;
@@ -54,7 +70,8 @@ VOID ImageLoad(IMG img, VOID *v)
             address = RTN_Address(rtn);
             PIN_GetSourceLocation(address, &column, &line, &file);
 
-            if(manager->filter.isFileFiltered(file)) {
+
+            if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown")) {
                 RTN_Close(rtn);
                 continue;
             }
@@ -73,13 +90,22 @@ VOID ImageLoad(IMG img, VOID *v)
                 location.column = column;
 
                 if(file.length() > 0) {
-                    auto it = manager->sourceLocationTagIdMap.find(location);
-                    if (it != manager->sourceLocationTagIdMap.end()) {
+                    auto it = manager->sourceLocationTagInstructionIdMap.find(location);
+                    if (it != manager->sourceLocationTagInstructionIdMap.end()) {
+                        /*INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)do_entry,
+                           IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag),
+                           IARG_INST_PTR,
+                           IARG_TSC,
+                           IARG_UINT32, static_cast<UINT32>(it->second),
+                           IARG_THREAD_ID,
+                           IARG_PTR, v,
+                           IARG_END);*/
+
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
+                             /*IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
                              IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
                              IARG_TSC, offsetof(struct BufferEntry, tsc),
-                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
+                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),*/
                              IARG_END);
                     }
                 }
@@ -148,6 +174,12 @@ int main(int argc, char * argv[])
 
     bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 100,
                 BufferFull, (void*)manager);
+
+    if(bufId == BUFFER_ID_INVALID)
+    {
+        std::cerr << "Error: could not allocate initial buffer" << endl;
+        return 1;
+    }
 
     IMG_AddInstrumentFunction(ImageLoad, (void*)manager);
     PIN_AddFiniFunction(Fini, (void*)manager);

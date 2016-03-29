@@ -23,13 +23,15 @@ public:
     SQLWriter writer;
     Filter filter;
 
-    std::map<SourceLocation, int> sourceLocationTagIdMap;
+    std::map<SourceLocation, int> sourceLocationTagInstructionIdMap;
 
     std::vector<Tag> tags;
     std::map<int, Tag> tagIdTagMap;
-    std::map<int, int> simpleTagInstanceMap;
 
-    void bufferFull(struct BufferEntry*, UINT64, THREADID);
+    std::vector<TagInstruction> tagInstructions;
+    std::map<int, TagInstruction> tagInstructionIdMap;
+
+      void bufferFull(struct BufferEntry*, UINT64, THREADID);
 
     void setUpThreadManager(THREADID);
     void tearDownThreadManager(THREADID);

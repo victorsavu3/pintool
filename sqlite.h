@@ -50,6 +50,7 @@ public:
     void bind(int, const std::string&);
     void bind(int, const char*);
 
+    void checkColumn(int);
     int columnInt(int);
     std::string columnString(int);
 
@@ -113,7 +114,7 @@ StatementBinder operator<<(std::shared_ptr<Statement>& stmt, const T& obj) {
 class StatementReader
 {
 public:
-    StatementReader(std::shared_ptr<Statement>) : stmt(stmt), at(1) {}
+    StatementReader(std::shared_ptr<Statement> stmt) : stmt(stmt), at(0) {}
 
     template <typename T>
     StatementReader& operator>>(T& obj) {
