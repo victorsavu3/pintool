@@ -45,6 +45,7 @@ private:
     void writeTags();
     void loadSourceLocationTagIdMap();
     void loadTagIdTagMap();
+    void loadTagInstructionIdMap();
 
     std::map<THREADID, ThreadManager> threadmanagers;
 

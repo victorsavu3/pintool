@@ -23,8 +23,10 @@ public:
     void insertSourceLocation(SourceLocation&);
     void insertTag(Tag&);
     void insertTagInstruction(TagInstruction&);
+    void insertTagInstance(TagInstance&);
+    void insertThread(Thread&);
 
-    void insertTagHit(ADDRINT address, UINT64 tsc, int tagId);
+    void insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread);
 
     int getFunctionIdByPrototype(const std::string& name);
     int getSourceLocationId(const SourceLocation& location);
@@ -42,9 +44,11 @@ private:
     std::shared_ptr<SQLite::Statement> insertImageStmt;
     std::shared_ptr<SQLite::Statement> insertFunctionStmt;
     std::shared_ptr<SQLite::Statement> insertTagStmt;
+    std::shared_ptr<SQLite::Statement> insertTagInstructionStmt;
+    std::shared_ptr<SQLite::Statement> insertTagInstanceStmt;
+    std::shared_ptr<SQLite::Statement> insertThreadStmt;
 
     std::shared_ptr<SQLite::Statement> insertTagHitStmt;
-    std::shared_ptr<SQLite::Statement> insertTagInstructionStmt;
 
     std::shared_ptr<SQLite::Statement> getFunctionIdByNameStmt;
     std::shared_ptr<SQLite::Statement> getSourceLocationIdStmt;

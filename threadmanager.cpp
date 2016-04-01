@@ -10,7 +10,9 @@ ThreadManager::ThreadManager(Manager *manager, THREADID tid) : manager(manager),
     PIN_MutexInit(&mutex);
 
     startTSC = rdtsc();
-    clock_gettime(CLOCK_REALTIME, &startTime);
+    clock_gettime(CLOCK_REALTIME, &self.startTime);
+
+    self.genId();
 }
 
 void ThreadManager::bufferFull(BufferEntry * entries, UINT64 count)
@@ -20,6 +22,11 @@ void ThreadManager::bufferFull(BufferEntry * entries, UINT64 count)
         handleEntry(&entries[i]);
     }
     unlock();
+}
+
+void ThreadManager::threadStopped()
+{
+    manager->writer.insertThread(self);
 }
 
 void ThreadManager::handleEntry(BufferEntry * entry)
@@ -42,23 +49,59 @@ void ThreadManager::handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructio
 
     lastTagHitId = tagInstructionId;
 
-    manager->writer.insertTagHit(instruction, tsc, tagInstructionId);
+    manager->writer.insertTagHit(instruction, tsc, tagInstructionId, self.id);
 
     TagInstruction& tagInstruction = manager->tagInstructionIdMap[tagInstructionId];
     Tag& tag = manager->tagIdTagMap[tagInstruction.tag];
 
+    std::list<TagInstance>::iterator tagInstance = findCurrentTagInstance(tag.id);
+
     switch (tagInstruction.type) {
-        case TagInstructionType::Start:
-            tags.insert(tagInstruction.tag);
+    case TagInstructionType::Start:
+    {
+        if (tagInstance != currentTagInstances.end()) {
+            CorruptedBufferException("Starting an already started tag");
+        }
 
-            break;
-        case TagInstructionType::Stop:
-            tags.erase(tagInstruction.tag);
+        TagInstance ti;
+        ti.genId();
 
-            break;
-        default:
-            CorruptedBufferException("Invalid type for TagInstruction");
+        ti.start = tsc;
+        ti.tag = tag.id;
+        ti.thread = self.id;
+
+        currentTagInstances.push_front(ti);
+
+        break;
     }
+
+    case TagInstructionType::Stop:
+    {
+        if (tagInstance == currentTagInstances.end()) {
+            CorruptedBufferException("Stopping an unstarted tag");
+        }
+
+        tagInstance->end = tsc;
+
+        manager->writer.insertTagInstance(*tagInstance);
+
+        currentTagInstances.erase(tagInstance);
+    }
+
+        break;
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+}
+
+std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)
+{
+    for(auto tagInstance = currentTagInstances.begin(); tagInstance != currentTagInstances.end(); tagInstance++) {
+        if(tagInstance->tag == tagId)
+            return tagInstance;
+    }
+
+    return currentTagInstances.end();
 }
 
 void ThreadManager::lock()

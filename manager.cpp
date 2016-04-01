@@ -10,6 +10,8 @@ Manager::Manager(const string &db, const string &source, const string &filter) :
 
     loadTags(source);
     writeTags();
+
+    loadTagInstructionIdMap();
     loadSourceLocationTagIdMap();
     loadTagIdTagMap();
 }
@@ -33,7 +35,12 @@ void Manager::setUpThreadManager(THREADID tid)
 void Manager::tearDownThreadManager(THREADID tid)
 {
     lock();
-    threadmanagers.erase(tid);
+
+    auto it = threadmanagers.find(tid);
+
+    it->second.threadStopped();
+
+    threadmanagers.erase(it);
     unlock();
 }
 
@@ -74,7 +81,7 @@ void Manager::loadTags(const string &file)
         } else if (typeName == "Counter") {
             t.type = TagType::Counter;
         } else {
-            YAMLException(file, "invalid tag type");
+            YAMLException(file, "_ tag type");
         }
 
         this->tags.push_back(t);
@@ -119,14 +126,13 @@ void Manager::loadTags(const string &file)
 
 void Manager::writeTags()
 {
-    for (auto it : tags) {
+    for (auto& it : tags) {
         writer.insertTag(it);
     }
 
-    for (auto it = tagInstructions.begin(); it != tagInstructions.end(); it++) {
-        writer.insertTagInstruction(*it);
+    for (auto& tagInstruction : tagInstructions) {
+        writer.insertTagInstruction(tagInstruction);
     }
-
 }
 
 void Manager::loadSourceLocationTagIdMap()
@@ -140,6 +146,13 @@ void Manager::loadTagIdTagMap()
 {
     for (auto it : tags)
         tagIdTagMap.insert(std::make_pair(it.id, it));
+}
+
+void Manager::loadTagInstructionIdMap()
+{
+    for (auto tagInstruction : tagInstructions) {
+        tagInstructionIdMap.insert(std::make_pair(tagInstruction.id, tagInstruction));
+    }
 }
 
 void Manager::lock()

@@ -3,6 +3,11 @@
 
 #include <string>
 #include <functional>
+#include <atomic>
+
+#include <time.h>
+
+#include <pin.H>
 
 class Image {
   public:
@@ -56,6 +61,29 @@ public:
     int location;
     int tag;
     TagInstructionType type;
+};
+
+class TagInstance {
+public:
+    int id;
+    void genId();
+
+    int thread;
+    int tag;
+    UINT64 start;
+    UINT64 end;
+
+    /* Counter tag */
+    int counter;
+};
+
+class Thread {
+public:
+    int id;
+    void genId();
+
+    int instruction;
+    struct timespec startTime;
 };
 
 namespace std {

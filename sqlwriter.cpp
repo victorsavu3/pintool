@@ -17,18 +17,20 @@ SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db) : db(db) {
 }
 
 void SQLWriter::prepareStatements() {
-    this->insertImageStmt = this->db->makeStatement("INSERT INTO Image(Name) VALUES(?);");
-    this->insertFileStmt = this->db->makeStatement("INSERT INTO File(Path, Image) VALUES(?, ?);");
-    this->insertFunctionStmt = this->db->makeStatement("INSERT INTO Function(Name, Prototype, File, Line) VALUES(?, ?, ?, ?);");
-    this->insertSourceLocationStmt = this->db->makeStatement("INSERT INTO SourceLocation(Function, Line, Column) VALUES(?, ?, ?);");
-    this->insertTagStmt = this->db->makeStatement("INSERT INTO Tag(Id, Name, Type) VALUES(?, ?, ?);");
-    this->insertTagInstructionStmt = this->db->makeStatement("INSERT INTO TagInstruction(Tag, Location, Type) VALUES(?, ?, ?);");
+    insertImageStmt = this->db->makeStatement("INSERT INTO Image(Name) VALUES(?);");
+    insertFileStmt = this->db->makeStatement("INSERT INTO File(Path, Image) VALUES(?, ?);");
+    insertFunctionStmt = this->db->makeStatement("INSERT INTO Function(Name, Prototype, File, Line) VALUES(?, ?, ?, ?);");
+    insertSourceLocationStmt = this->db->makeStatement("INSERT INTO SourceLocation(Function, Line, Column) VALUES(?, ?, ?);");
+    insertTagStmt = this->db->makeStatement("INSERT INTO Tag(Id, Name, Type) VALUES(?, ?, ?);");
+    insertTagInstructionStmt = this->db->makeStatement("INSERT INTO TagInstruction(Tag, Location, Type) VALUES(?, ?, ?);");
+    insertTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Id, Tag, Start, End, Thread, Counter) VALUES(?, ?, ?, ?, ?, ?);");
+    insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, Instruction, StartTime) VALUES(?, ?, ?);");
 
-    this->insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(Address, TSC, TagInstruction) VALUES(?, ?, ?);");
+    insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(Address, TSC, TagInstruction, Thread) VALUES(?, ?, ?, ?);");
 
-    this->getFunctionIdByNameStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Prototype = ?");
-    this->getSourceLocationIdStmt = this->db->makeStatement("SELECT Id FROM SourceLocation WHERE Function = ? AND Line = ? AND Column = ?");
-    this->getSourceLocationByIdStmt = this->db->makeStatement("SELECT Function, Line, Column FROM SourceLocation WHERE ID = ?");
+    getFunctionIdByNameStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Prototype = ?");
+    getSourceLocationIdStmt = this->db->makeStatement("SELECT Id FROM SourceLocation WHERE Function = ? AND Line = ? AND Column = ?");
+    getSourceLocationByIdStmt = this->db->makeStatement("SELECT Function, Line, Column FROM SourceLocation WHERE ID = ?");
 }
 
 
@@ -45,7 +47,9 @@ void SQLWriter::createDatabase() {
         "CREATE TABLE IF NOT EXISTS SourceLocation(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Function INTEGER, Line INTEGER, Column INTEGER, UNIQUE(Function, Line, Column) ON CONFLICT IGNORE);"
         "CREATE TABLE IF NOT EXISTS Tag(Id INTEGER PRIMARY KEY NOT NULL, Name VARCHAR, Type INTEGER);"
         "CREATE TABLE IF NOT EXISTS TagInstruction(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Location INTEGER, Type INTEGER);"
-        "CREATE TABLE IF NOT EXISTS TagHit(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Address INTEGER, TSC INTEGER, TagInstruction INTEGER)"
+        "CREATE TABLE IF NOT EXISTS TagInstance(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Start INTEGER, End INTEGER, Thread INTEGER, Counter INTEGER);"
+        "CREATE TABLE IF NOT EXISTS TagHit(Id INTEGER PRIMARY KEY NOT NULL, Address INTEGER, TSC INTEGER, TagInstruction INTEGER, Thread INTEGER);"
+        "CREATE TABLE IF NOT EXISTS Thread(Id INTEGER PRIMARY KEY NOT NULL, Instruction INTEGER, StartTime String);"
         );
 }
 
@@ -119,11 +123,31 @@ void SQLWriter::insertTagInstruction(TagInstruction &tagInstruction)
     unlock();
 }
 
-void SQLWriter::insertTagHit(ADDRINT address, UINT64 tsc, int tagId)
+void SQLWriter::insertTagInstance(TagInstance &tagInstance)
 {
     lock();
 
-    insertTagHitStmt << address << tsc << tagId;
+    insertTagInstanceStmt << tagInstance.id << tagInstance.tag << tagInstance.start << tagInstance.end << tagInstance.thread << tagInstance.counter;
+    insertTagInstanceStmt->execute();
+
+    unlock();
+}
+
+void SQLWriter::insertThread(Thread &thread )
+{
+    lock();
+
+    insertThreadStmt << thread.id << thread.instruction << thread.startTime;
+    insertThreadStmt->execute();
+
+    unlock();
+}
+
+void SQLWriter::insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread)
+{
+    lock();
+
+    insertTagHitStmt << address << tsc << tagId << thread;
     insertTagHitStmt->execute();
 
     unlock();

@@ -1,7 +1,7 @@
 #ifndef THREADMANAGER_H
 #define THREADMANAGER_H
 
-#include <set>
+#include <list>
 
 #include <pin.H>
 
@@ -17,6 +17,7 @@ public:
     ThreadManager(Manager* manager, THREADID tid);
 
     void bufferFull(struct BufferEntry*, UINT64);
+    void threadStopped();
 private:
     Manager* manager;
     THREADID tid;
@@ -25,10 +26,13 @@ private:
 
     void handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructionId);
     int lastTagHitId;
-    std::set<int> tags;
+
+    std::list<TagInstance> currentTagInstances;
+    std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);
 
     UINT64 startTSC;
-    struct timespec startTime;
+
+    Thread self;
 
     void lock();
     void unlock();

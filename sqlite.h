@@ -49,6 +49,7 @@ public:
     void bind(int, int);
     void bind(int, const std::string&);
     void bind(int, const char*);
+    void bind(int, struct timespec);
 
     void checkColumn(int);
     int columnInt(int);

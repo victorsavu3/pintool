@@ -12,7 +12,7 @@ namespace SQLite {
 Connection::Connection(const char * location, bool forceCreate) {
     if (forceCreate) {
         if( access( location, F_OK ) != -1 ) {
-            throw std::invalid_argument("Database already exists");
+            SQLiteException("Database already exists", 0, "Connection constructor");
         }
     }
 
@@ -120,6 +120,20 @@ void Statement::bind(int pos, const char* val) {
         SQLiteException(this->connection.get(), code, "bind char*");
 
     connection->unlock();
+}
+
+void Statement::bind(int pos, struct timespec val)
+{
+    char timeString[100];
+    char timeStringWithNanoseconds[200];
+    struct tm t;
+
+    gmtime_r(&(val.tv_sec), &t);
+
+    strftime(timeString, sizeof(timeString), "%FT%TZ", &t);
+    snprintf(timeStringWithNanoseconds, sizeof(timeStringWithNanoseconds), "%s:%ld", timeString, val.tv_nsec);
+
+    bind(pos, timeStringWithNanoseconds);
 }
 
 void Statement::checkColumn(int col)
