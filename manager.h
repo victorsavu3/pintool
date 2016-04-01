@@ -24,6 +24,7 @@ public:
     Filter filter;
 
     std::map<SourceLocation, int> sourceLocationTagInstructionIdMap;
+    std::map<ADDRINT, int> addressTagIdMap;
 
     std::vector<Tag> tags;
     std::map<int, Tag> tagIdTagMap;
@@ -31,10 +32,13 @@ public:
     std::vector<TagInstruction> tagInstructions;
     std::map<int, TagInstruction> tagInstructionIdMap;
 
-      void bufferFull(struct BufferEntry*, UINT64, THREADID);
+    void bufferFull(struct BufferEntry*, UINT64, THREADID);
 
     void setUpThreadManager(THREADID);
     void tearDownThreadManager(THREADID);
+
+    void lock();
+    void unlock();
 private:
     /* Called in constructor */
     void loadTags(const std::string& file);
@@ -43,9 +47,6 @@ private:
     void loadTagIdTagMap();
 
     std::map<THREADID, ThreadManager> threadmanagers;
-
-    void lock();
-    void unlock();
 
     PIN_MUTEX mutex;
 };

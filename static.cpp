@@ -37,8 +37,11 @@ VOID ImageLoad(IMG img, VOID *v)
 
     fprintf(stderr, "Processing %s\n", image.name.c_str());
 
-    if(manager->filter->isImageFiltered(image.name))
+    if(manager->filter->isImageFiltered(image.name)) {
+        cerr << "Skipping image:" << image.name << endl;
         return;
+    }
+
 
     writer->insertImage(image);
 
@@ -58,6 +61,7 @@ VOID ImageLoad(IMG img, VOID *v)
             function.prototype = PIN_UndecorateSymbolName(sym, UNDECORATION_COMPLETE);
 
             if(manager->filter->isFunctionFiltered(function.name) || manager->filter->isFunctionFiltered(function.prototype)) {
+                cerr << "Skipping function:" << function.prototype << endl;
                 RTN_Close(rtn);
                 continue;
             }
@@ -73,6 +77,7 @@ VOID ImageLoad(IMG img, VOID *v)
                 }
 
                 if(manager->filter->isFileFiltered(file)) {
+                    cerr << "Skipping file:" << file << endl;
                     RTN_Close(rtn);
                     continue;
                 }

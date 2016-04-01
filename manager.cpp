@@ -123,15 +123,17 @@ void Manager::writeTags()
         writer.insertTag(it);
     }
 
-    for (auto it : tagInstructions) {
-        writer.insertTagInstruction(it);
+    for (auto it = tagInstructions.begin(); it != tagInstructions.end(); it++) {
+        writer.insertTagInstruction(*it);
     }
+
 }
 
 void Manager::loadSourceLocationTagIdMap()
 {
-    for (auto it : tagInstructions)
+    for (auto it : tagInstructions) {
         sourceLocationTagInstructionIdMap.insert(std::make_pair(writer.getSourceLocationById(it.location), it.id));
+    }
 }
 
 void Manager::loadTagIdTagMap()

@@ -21,25 +21,12 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 
 BUFFER_ID bufId;
 
-void do_entry(UINT32 type, ADDRINT instr, UINT64 tsc, UINT32 tagId, THREADID tid, VOID* v) {
-    std::cerr << "called" << std::endl;
-
-    struct BufferEntry entry;
-
-    entry.type = static_cast<BuferEntryType>(type);
-    entry.instruction = instr;
-    entry.tsc = tsc;
-
-    entry.data.tag.tagId = tagId;
-
-    Manager* manager = (Manager*)v;
-
-    manager->bufferFull(&entry, 1, tid);
-}
-
 VOID ImageLoad(IMG img, VOID *v)
 {
     Manager* manager = (Manager*)v;
+
+    manager->lock();
+    PIN_LockClient();
 
     INT32 column;
     INT32 line;
@@ -47,81 +34,95 @@ VOID ImageLoad(IMG img, VOID *v)
     string image = IMG_Name(img);
     ADDRINT address;
 
-    if(manager->filter.isImageFiltered(image))
-        return;
-
-
-    for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec))
-    {
-        for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn))
+    if(!manager->filter.isImageFiltered(image))
+        for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec))
         {
-            RTN_Open(rtn);
-
-            std::string sym = RTN_Name(rtn);
-
-            std::string name = PIN_UndecorateSymbolName(sym, UNDECORATION_NAME_ONLY);
-            std::string prototype = PIN_UndecorateSymbolName(sym, UNDECORATION_COMPLETE);
-
-            if(manager->filter.isFunctionFiltered(name) || manager->filter.isFunctionFiltered(prototype)) {
-                RTN_Close(rtn);
-                continue;
-            }
-
-            address = RTN_Address(rtn);
-            PIN_GetSourceLocation(address, &column, &line, &file);
-
-
-            if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown")) {
-                RTN_Close(rtn);
-                continue;
-            }
-
-            int functionId = manager->writer.getFunctionIdByPrototype(prototype);
-
-            for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
+            for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn))
             {
-                address = INS_Address(ins);
+                RTN_Open(rtn);
+
+                std::string sym = RTN_Name(rtn);
+
+                std::string name = PIN_UndecorateSymbolName(sym, UNDECORATION_NAME_ONLY);
+                std::string prototype = PIN_UndecorateSymbolName(sym, UNDECORATION_COMPLETE);
+
+                if(manager->filter.isFunctionFiltered(name) || manager->filter.isFunctionFiltered(prototype)) {
+                    RTN_Close(rtn);
+                    continue;
+                }
+
+                address = RTN_Address(rtn);
                 PIN_GetSourceLocation(address, &column, &line, &file);
 
-                SourceLocation location;
 
-                location.function = functionId;
-                location.line = line;
-                location.column = column;
+                if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown")) {
+                    RTN_Close(rtn);
+                    continue;
+                }
 
-                if(file.length() > 0) {
-                    auto it = manager->sourceLocationTagInstructionIdMap.find(location);
-                    if (it != manager->sourceLocationTagInstructionIdMap.end()) {
-                        /*INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)do_entry,
-                           IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag),
-                           IARG_INST_PTR,
-                           IARG_TSC,
-                           IARG_UINT32, static_cast<UINT32>(it->second),
-                           IARG_THREAD_ID,
-                           IARG_PTR, v,
-                           IARG_END);*/
+                int functionId = manager->writer.getFunctionIdByPrototype(prototype);
 
-                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                             /*IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
-                             IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
-                             IARG_TSC, offsetof(struct BufferEntry, tsc),
-                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),*/
-                             IARG_END);
+                for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
+                {
+                    address = INS_Address(ins);
+                    PIN_GetSourceLocation(address, &column, &line, &file);
+
+                    SourceLocation location;
+
+                    location.function = functionId;
+                    location.line = line;
+                    location.column = column;
+
+                    if(file.length() > 0) {
+                        auto it = manager->sourceLocationTagInstructionIdMap.find(location);
+                        if (it != manager->sourceLocationTagInstructionIdMap.end()) {
+                            cerr << it->first.line << '-' << it->second << endl;
+                            manager->addressTagIdMap.insert(std::make_pair(address, it->second));
+                        }
                     }
                 }
-            }
 
-            RTN_Close(rtn);
+                RTN_Close(rtn);
+            }
+        }
+
+    manager->unlock();
+    PIN_UnlockClient();
+}
+
+VOID Trace(TRACE trace, VOID *v)
+{
+    Manager* manager = (Manager*)v;
+
+    manager->lock();
+    PIN_LockClient();
+
+    for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
+    {
+        for(INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins=INS_Next(ins)) {
+            ADDRINT address = INS_Address(ins);
+
+            auto it = manager->addressTagIdMap.find(address);
+
+            if (it != manager->addressTagIdMap.end()) {
+                INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                     IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
+                     IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
+                     IARG_TSC, offsetof(struct BufferEntry, tsc),
+                     IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
+                     IARG_END);
+
+            }
         }
     }
 
+    manager->unlock();
+    PIN_UnlockClient();
 }
 
 INT32 Usage()
 {
-    cerr << "This tool prints a log of image load and unload events" << endl;
-    cerr << " along with static instruction counts for each image." << endl;
-    cerr << endl << KNOB_BASE::StringKnobSummary() << endl;
+    cerr << KNOB_BASE::StringKnobSummary() << endl;
     return -1;
 }
 
@@ -144,13 +145,16 @@ VOID * BufferFull(BUFFER_ID, THREADID tid, const CONTEXT *, void *buffer,
     return buffer;
 }
 
-VOID ThreadStart(THREADID threadid, CONTEXT *, INT32, VOID *v)
-{
+void bindThreadToCore() {
     cpu_set_t my_set;
     CPU_ZERO(&my_set);
     CPU_SET(sched_getcpu(), &my_set);
     sched_setaffinity(0, sizeof(cpu_set_t), &my_set);
+}
 
+VOID ThreadStart(THREADID threadid, CONTEXT *, INT32, VOID *v)
+{
+    bindThreadToCore();
 
     Manager* manager = (Manager*)v;
 
@@ -185,6 +189,7 @@ int main(int argc, char * argv[])
     PIN_AddFiniFunction(Fini, (void*)manager);
     PIN_AddThreadStartFunction(ThreadStart, (void*)manager);
     PIN_AddThreadFiniFunction(ThreadFini, (void*)manager);
+    TRACE_AddInstrumentFunction(Trace, (void*)manager);
 
     PIN_StartProgram();
 
