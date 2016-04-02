@@ -15,6 +15,7 @@ class ThreadManager
 public:
     ThreadManager() {}
     ThreadManager(Manager* manager, THREADID tid);
+    ~ThreadManager();
 
     void bufferFull(struct BufferEntry*, UINT64);
     void threadStopped();
@@ -26,6 +27,10 @@ private:
 
     void handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructionId);
     int lastTagHitId;
+
+    void handleCallEnter(ADDRINT instruction, UINT64 tsc, int functionId);
+    void handleRet(ADDRINT instruction, UINT64 tsc);
+    std::list<Call> callStack;
 
     std::list<TagInstance> currentTagInstances;
     std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);

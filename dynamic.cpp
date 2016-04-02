@@ -54,7 +54,6 @@ VOID ImageLoad(IMG img, VOID *v)
                 address = RTN_Address(rtn);
                 PIN_GetSourceLocation(address, &column, &line, &file);
 
-
                 if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown")) {
                     RTN_Close(rtn);
                     continue;
@@ -94,28 +93,84 @@ VOID Trace(TRACE trace, VOID *v)
 {
     Manager* manager = (Manager*)v;
 
+    INT32 column;
+    INT32 line;
+    std::string file;
+    ADDRINT address;
+    std::string sym, name, prototype;
+
     manager->lock();
     PIN_LockClient();
 
-    for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
+    RTN rtn = TRACE_Rtn(trace);
+
+    if(!RTN_Valid(rtn))
+        goto cleanup;
+
+    /* TODO treat special RTN */
+
+    sym = RTN_Name(rtn);
+
+    name = PIN_UndecorateSymbolName(sym, UNDECORATION_NAME_ONLY);
+    prototype = PIN_UndecorateSymbolName(sym, UNDECORATION_COMPLETE);
+
+    if(manager->filter.isFunctionFiltered(name) || manager->filter.isFunctionFiltered(prototype)) {
+        goto cleanup;
+    }
+
+    address = RTN_Address(rtn);
+    PIN_GetSourceLocation(address, &column, &line, &file);
+
+    if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown")) {
+        goto cleanup;
+    }
+
     {
-        for(INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins=INS_Next(ins)) {
-            ADDRINT address = INS_Address(ins);
+        RTN_Open(rtn);
+        INS rtnHead = RTN_InsHead(rtn);
+        RTN_Close(rtn);
+        INS traceHead = BBL_InsHead(TRACE_BblHead(trace));
 
-            auto it = manager->addressTagIdMap.find(address);
+        if ( INS_Address(rtnHead) == INS_Address(traceHead) ) {
+            UINT32 functionId = manager->writer.getFunctionIdByPrototype(prototype);
 
-            if (it != manager->addressTagIdMap.end()) {
-                INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                     IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
-                     IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
-                     IARG_TSC, offsetof(struct BufferEntry, tsc),
-                     IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
-                     IARG_END);
+            INS_InsertFillBuffer(traceHead, IPOINT_BEFORE, bufId,
+                 IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
+                 IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
+                 IARG_TSC, offsetof(struct BufferEntry, tsc),
+                 IARG_UINT32, functionId, offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, functionId),
+                 IARG_END);
+        }
 
+        for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
+        {
+            for(INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins=INS_Next(ins)) {
+                ADDRINT address = INS_Address(ins);
+
+                auto it = manager->addressTagIdMap.find(address);
+
+                if (it != manager->addressTagIdMap.end()) {
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
+                         IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
+                         IARG_TSC, offsetof(struct BufferEntry, tsc),
+                         IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
+                         IARG_END);
+                }
+
+                if(INS_IsRet(ins)) {
+                    INS_InsertFillBuffer(traceHead, IPOINT_BEFORE, bufId,
+                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
+                         IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
+                         IARG_TSC, offsetof(struct BufferEntry, tsc),
+                         IARG_END);
+                }
             }
         }
     }
 
+
+    cleanup:
     manager->unlock();
     PIN_UnlockClient();
 }

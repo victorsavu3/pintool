@@ -10,7 +10,7 @@ SQLWriter::SQLWriter(const std::string& file, bool forceCreate) : db(std::make_s
 }
 
 SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db) : db(db) {
-    PIN_MutexFini(&mutex);
+    PIN_MutexInit(&mutex);
 
     createDatabase();
     prepareStatements();
@@ -24,7 +24,10 @@ void SQLWriter::prepareStatements() {
     insertTagStmt = this->db->makeStatement("INSERT INTO Tag(Id, Name, Type) VALUES(?, ?, ?);");
     insertTagInstructionStmt = this->db->makeStatement("INSERT INTO TagInstruction(Tag, Location, Type) VALUES(?, ?, ?);");
     insertTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Id, Tag, Start, End, Thread, Counter) VALUES(?, ?, ?, ?, ?, ?);");
-    insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, Instruction, StartTime) VALUES(?, ?, ?);");
+    insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, Instruction, StartTime, EndTSC, EndTime) VALUES(?, ?, ?, ?, ?);");
+    insertCallStmt = this->db->makeStatement("INSERT INTO Call(Id, Thread, Function, Instruction, Start, End) VALUES(?, ?, ?, ?, ?, ?);");
+    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type, TSC) VALUES(?, ?, ?);");
+    insertSegmentStmt = this->db->makeStatement("INSERT INTO Segment(Call, Type) VALUES(?, ?);");
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(Address, TSC, TagInstruction, Thread) VALUES(?, ?, ?, ?);");
 
@@ -36,7 +39,7 @@ void SQLWriter::prepareStatements() {
 
 SQLWriter::~SQLWriter()
 {
-
+    PIN_MutexFini(&mutex);
 }
 
 void SQLWriter::createDatabase() {
@@ -49,7 +52,10 @@ void SQLWriter::createDatabase() {
         "CREATE TABLE IF NOT EXISTS TagInstruction(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Location INTEGER, Type INTEGER);"
         "CREATE TABLE IF NOT EXISTS TagInstance(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Start INTEGER, End INTEGER, Thread INTEGER, Counter INTEGER);"
         "CREATE TABLE IF NOT EXISTS TagHit(Id INTEGER PRIMARY KEY NOT NULL, Address INTEGER, TSC INTEGER, TagInstruction INTEGER, Thread INTEGER);"
-        "CREATE TABLE IF NOT EXISTS Thread(Id INTEGER PRIMARY KEY NOT NULL, Instruction INTEGER, StartTime String);"
+        "CREATE TABLE IF NOT EXISTS Thread(Id INTEGER PRIMARY KEY NOT NULL, Instruction INTEGER, StartTime String, EndTSC INTEGER, EndTime String);"
+        "CREATE TABLE IF NOT EXISTS Instruction(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Segment INTEGER, Type INTEGER, Line INTEGER, TSC INTEGER);"
+        "CREATE TABLE IF NOT EXISTS Segment(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Call INTEGER, Type INTEGER, LoopIteration INTEGER);"
+        "CREATE TABLE IF NOT EXISTS Call(Id INT PRIMARY KEY NOT NULL, Thread INTEGER, Function INT NOT NULL, Instruction INT NOT NULL, Start INT, End INT);"
         );
 }
 
@@ -123,7 +129,7 @@ void SQLWriter::insertTagInstruction(TagInstruction &tagInstruction)
     unlock();
 }
 
-void SQLWriter::insertTagInstance(TagInstance &tagInstance)
+void SQLWriter::insertTagInstance(const TagInstance &tagInstance)
 {
     lock();
 
@@ -133,12 +139,42 @@ void SQLWriter::insertTagInstance(TagInstance &tagInstance)
     unlock();
 }
 
-void SQLWriter::insertThread(Thread &thread )
+void SQLWriter::insertThread(const Thread &thread )
 {
     lock();
 
-    insertThreadStmt << thread.id << thread.instruction << thread.startTime;
+    insertThreadStmt << thread.id << thread.instruction << thread.startTime << thread.endTSC << thread.endTime;
     insertThreadStmt->execute();
+
+    unlock();
+}
+
+void SQLWriter::insertCall(const Call & call)
+{
+    lock();
+
+    insertCallStmt << call.id << call.thread << call.function, call.instruction, call.start, call.end;
+    insertCallStmt->execute();
+
+    unlock();
+}
+
+void SQLWriter::insertSegment(Segment &segment)
+{
+    lock();
+
+    insertSegmentStmt << segment.call << static_cast<int>(segment.type);
+    segment.id = insertSegmentStmt->executeInsert();
+
+    unlock();
+}
+
+void SQLWriter::insertInstruction(Instruction & instruction)
+{
+    lock();
+
+    insertInstructionStmt << instruction.segment << static_cast<int>(instruction.type) << instruction.tsc;
+    instruction.id = insertInstructionStmt->executeInsert();
 
     unlock();
 }

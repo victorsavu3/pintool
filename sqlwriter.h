@@ -23,8 +23,11 @@ public:
     void insertSourceLocation(SourceLocation&);
     void insertTag(Tag&);
     void insertTagInstruction(TagInstruction&);
-    void insertTagInstance(TagInstance&);
-    void insertThread(Thread&);
+    void insertTagInstance(const TagInstance&);
+    void insertThread(const Thread&);
+    void insertCall(const Call&);
+    void insertSegment(Segment&);
+    void insertInstruction(Instruction&);
 
     void insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread);
 
@@ -47,6 +50,9 @@ private:
     std::shared_ptr<SQLite::Statement> insertTagInstructionStmt;
     std::shared_ptr<SQLite::Statement> insertTagInstanceStmt;
     std::shared_ptr<SQLite::Statement> insertThreadStmt;
+    std::shared_ptr<SQLite::Statement> insertCallStmt;
+    std::shared_ptr<SQLite::Statement> insertSegmentStmt;
+    std::shared_ptr<SQLite::Statement> insertInstructionStmt;
 
     std::shared_ptr<SQLite::Statement> insertTagHitStmt;
 

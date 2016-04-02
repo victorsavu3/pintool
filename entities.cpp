@@ -1,15 +1,10 @@
 #include "entities.h"
 
-std::atomic<int> TagInstanceIdCounter(1);
+#include <atomic>
 
-void TagInstance::genId()
+std::atomic<int> GeneratedId(1);
+
+void EntityWithGeneratedId::genId()
 {
-    id = TagInstanceIdCounter++;
-}
-
-std::atomic<int> ThreadIdCounter(1);
-
-void Thread::genId()
-{
-    id = ThreadIdCounter++;
+    id = GeneratedId++;
 }

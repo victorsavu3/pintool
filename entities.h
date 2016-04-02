@@ -3,11 +3,16 @@
 
 #include <string>
 #include <functional>
-#include <atomic>
 
 #include <time.h>
 
 #include <pin.H>
+
+class EntityWithGeneratedId {
+public:
+    int id;
+    void genId();
+};
 
 class Image {
   public:
@@ -42,7 +47,10 @@ class SourceLocation {
     int column;
 };
 
-enum TagType { Simple, Counter };
+enum class TagType {
+    Simple = 0,
+    Counter = 1
+};
 
 class Tag {
   public:
@@ -52,7 +60,10 @@ class Tag {
     TagType type;
 };
 
-enum TagInstructionType { Start, Stop };
+enum class TagInstructionType {
+    Start = 0,
+    Stop = 1
+};
 
 class TagInstruction {
 public:
@@ -63,11 +74,8 @@ public:
     TagInstructionType type;
 };
 
-class TagInstance {
+class TagInstance : public EntityWithGeneratedId {
 public:
-    int id;
-    void genId();
-
     int thread;
     int tag;
     UINT64 start;
@@ -77,13 +85,49 @@ public:
     int counter;
 };
 
-class Thread {
+class Thread : public EntityWithGeneratedId {
 public:
-    int id;
-    void genId();
-
     int instruction;
     struct timespec startTime;
+
+    struct timespec endTime;
+    UINT64 endTSC;
+};
+
+class Call : public EntityWithGeneratedId {
+public:
+    int thread;
+    int instruction;
+    int function;
+    UINT64 start, end;
+};
+
+enum class SegmentType {
+    Standard = 0,
+    Loop = 1
+};
+
+class Segment {
+public:
+    int id;
+    int call;
+    SegmentType type;
+};
+
+enum class InstructionType {
+    Call    = 0,
+    Access  = 1,
+    Alloc   = 2,
+    Free    = 3
+  };
+
+class Instruction {
+public:
+    int id;
+
+    InstructionType type;
+    int segment;
+    UINT64 tsc;
 };
 
 namespace std {

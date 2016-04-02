@@ -15,6 +15,11 @@ ThreadManager::ThreadManager(Manager *manager, THREADID tid) : manager(manager),
     self.genId();
 }
 
+ThreadManager::~ThreadManager()
+{
+    PIN_MutexFini(&mutex);
+}
+
 void ThreadManager::bufferFull(BufferEntry * entries, UINT64 count)
 {
     lock();
@@ -24,8 +29,12 @@ void ThreadManager::bufferFull(BufferEntry * entries, UINT64 count)
     unlock();
 }
 
+
 void ThreadManager::threadStopped()
 {
+    self.endTSC = rdtsc();
+    clock_gettime(CLOCK_REALTIME, &self.endTime);
+
     manager->writer.insertThread(self);
 }
 
@@ -37,6 +46,11 @@ void ThreadManager::handleEntry(BufferEntry * entry)
     case BuferEntryType::Tag:
         handleTag(entry->instruction, passed, entry->data.tag.tagId);
         break;
+    case BuferEntryType::Call:
+        handleCallEnter(entry->instruction, passed, entry->data.call.functionId);
+        break;
+    case BuferEntryType::Ret:
+        handleRet(entry->instruction, passed);
     default:
         CorruptedBufferException("Invalid entry type");
     }
@@ -92,6 +106,46 @@ void ThreadManager::handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructio
     default:
         CorruptedBufferException("Invalid type for TagInstruction");
     }
+}
+
+void ThreadManager::handleCallEnter(ADDRINT instruction, UINT64 tsc, int functionId)
+{
+    Call c;
+    c.genId();
+
+    if(callStack.empty()) {
+        c.instruction = 0;
+    } else {
+        Instruction i;
+        Segment s;
+
+        s.call = callStack.back().id;
+        s.type = SegmentType::Standard;
+        manager->writer.insertSegment(s);
+
+        i.segment = s.id;
+        i.type = InstructionType::Call;
+        i.tsc = tsc;
+        manager->writer.insertInstruction(i);
+
+        c.instruction = i.id;
+    }
+
+    c.function = functionId;
+    c.start = tsc;
+    c.thread = self.id;
+
+    callStack.push_back(c);
+}
+
+void ThreadManager::handleRet(ADDRINT instruction, UINT64 tsc)
+{
+    Call c = callStack.back();
+    callStack.pop_back();
+
+    c.end = tsc;
+
+    manager->writer.insertCall(c);
 }
 
 std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)
