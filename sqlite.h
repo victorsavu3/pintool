@@ -73,6 +73,8 @@ public:
 private:
     sqlite3_stmt* stmt;
     std::shared_ptr<Connection> connection;
+    int columnCount;
+    int lastBound;
 };
 
 template <> inline int Statement::column<int>(int col) { return columnInt(col); }

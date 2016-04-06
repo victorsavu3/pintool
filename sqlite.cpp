@@ -74,6 +74,9 @@ Statement::Statement(std::shared_ptr<Connection> connection, const char* sql) : 
         SQLiteException(this->connection.get(), code, "Statemenet constructor");
     }
 
+    columnCount = sqlite3_column_count(stmt);
+    lastBound = -1;
+
     connection->unlock();
 }
 
@@ -138,14 +141,12 @@ void Statement::bind(int pos, struct timespec val)
 
 void Statement::checkColumn(int col)
 {
-    connection->lock();
-
-    int colCount = sqlite3_column_count(stmt);
-
-    if(colCount <= col)
+    if(columnCount <= col)
         SQLiteException("Request for column outside row", 0, "bind char*");
 
-    connection->unlock();
+    if (col > lastBound) {
+        lastBound = col;
+    }
 }
 
 int Statement::columnInt(int col)
@@ -198,6 +199,8 @@ void Statement::reset()
 
 void Statement::clearBindings()
 {
+    lastBound = -1;
+
     connection->lock();
 
     clearBindingsUnlocked();
@@ -236,6 +239,9 @@ void Statement::clearBindingsUnlocked() {
 }
 
 void Statement::stepUnlocked() {
+    if(lastBound != columnCount - 1)
+        SQLiteException("Not all parameters bound", 0, "stepUnlocked");
+
     if (int code = sqlite3_step(this->stmt) != SQLITE_DONE)
         SQLiteException(this->connection.get(), code, "stepUnlocked");
 }

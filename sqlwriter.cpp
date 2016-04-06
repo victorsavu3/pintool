@@ -7,6 +7,8 @@ SQLWriter::SQLWriter(const std::string& file, bool forceCreate) : db(std::make_s
 
     createDatabase();
     prepareStatements();
+
+    begin();
 }
 
 SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db) : db(db) {
@@ -14,9 +16,14 @@ SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db) : db(db) {
 
     createDatabase();
     prepareStatements();
+
+    begin();
 }
 
 void SQLWriter::prepareStatements() {
+    beginTransactionStmt = this->db->makeStatement("BEGIN EXCLUSIVE TRANSACTION");
+    commitTransactionStmt = this->db->makeStatement("COMMIT TRANSACTION");
+
     insertImageStmt = this->db->makeStatement("INSERT INTO Image(Name) VALUES(?);");
     insertFileStmt = this->db->makeStatement("INSERT INTO File(Path, Image) VALUES(?, ?);");
     insertFunctionStmt = this->db->makeStatement("INSERT INTO Function(Name, Prototype, File, Line) VALUES(?, ?, ?, ?);");
@@ -31,15 +38,30 @@ void SQLWriter::prepareStatements() {
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(Address, TSC, TagInstruction, Thread) VALUES(?, ?, ?, ?);");
 
-    getFunctionIdByNameStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Prototype = ?");
+    getFunctionIdByPropertiesStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Prototype = ? AND File = (SELECT Id FROM File WHERE Image = ? AND Path = ?) AND Line = ?");
     getSourceLocationIdStmt = this->db->makeStatement("SELECT Id FROM SourceLocation WHERE Function = ? AND Line = ? AND Column = ?");
-    getSourceLocationByIdStmt = this->db->makeStatement("SELECT Function, Line, Column FROM SourceLocation WHERE ID = ?");
+    getSourceLocationByIdStmt = this->db->makeStatement("SELECT Function, Line, Column FROM SourceLocation WHERE Id = ?");
+    getImageIdByNameStmt = this->db->makeStatement("SELECT Id FROM Image WHERE Name = ?");
+
+    functionExistsStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Name = ? AND Prototype = ? AND File = ? AND Line = ?");
 }
 
 
 SQLWriter::~SQLWriter()
 {
     PIN_MutexFini(&mutex);
+
+    commit();
+}
+
+void SQLWriter::begin()
+{
+    beginTransactionStmt->execute();
+}
+
+void SQLWriter::commit()
+{
+    commitTransactionStmt->execute();
 }
 
 void SQLWriter::createDatabase() {
@@ -47,7 +69,7 @@ void SQLWriter::createDatabase() {
         "CREATE TABLE IF NOT EXISTS Image(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Name VARCHAR);"
         "CREATE TABLE IF NOT EXISTS File(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Path VARCHAR, Image INTEGER);"
         "CREATE TABLE IF NOT EXISTS Function(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Name VARCHAR, Prototype VARCHAR, File INTEGER, Line INTEGER);"
-        "CREATE TABLE IF NOT EXISTS SourceLocation(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Function INTEGER, Line INTEGER, Column INTEGER, UNIQUE(Function, Line, Column) ON CONFLICT IGNORE);"
+        "CREATE TABLE IF NOT EXISTS SourceLocation(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Function INTEGER, Line INTEGER, Column INTEGER);"
         "CREATE TABLE IF NOT EXISTS Tag(Id INTEGER PRIMARY KEY NOT NULL, Name VARCHAR, Type INTEGER);"
         "CREATE TABLE IF NOT EXISTS TagInstruction(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Location INTEGER, Type INTEGER);"
         "CREATE TABLE IF NOT EXISTS TagInstance(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Tag INTEGER, Start INTEGER, End INTEGER, Thread INTEGER, Counter INTEGER);"
@@ -153,7 +175,7 @@ void SQLWriter::insertCall(const Call & call)
 {
     lock();
 
-    insertCallStmt << call.id << call.thread << call.function, call.instruction, call.start, call.end;
+    insertCallStmt << call.id << call.thread << call.function << call.instruction << call.start << call.end;
     insertCallStmt->execute();
 
     unlock();
@@ -189,25 +211,25 @@ void SQLWriter::insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread)
     unlock();
 }
 
-int SQLWriter::getFunctionIdByPrototype(const string &name)
+int SQLWriter::getFunctionIdByProperties(const string &name, int image, const string &file, int line)
 {
     lock();
 
     int Id;
 
-    getFunctionIdByNameStmt << name;
-    if (getFunctionIdByNameStmt->stepRow()) {
-        Id = getFunctionIdByNameStmt->column<int>(0);
+    getFunctionIdByPropertiesStmt << name << image << file << line;
+    if (getFunctionIdByPropertiesStmt->stepRow()) {
+        Id = getFunctionIdByPropertiesStmt->column<int>(0);
     } else {
-        SQLWriterException("Could not find row", "getFunctionIdByPrototype");
+        SQLWriterException("Could not find row", "getFunctionIdByProperties");
     }
 
-    if (getFunctionIdByNameStmt->stepRow()) {
-        SQLWriterException("Too many rows returned", "getFunctionIdByPrototype");
+    if (getFunctionIdByPropertiesStmt->stepRow()) {
+        SQLWriterException("Too many rows returned", "getFunctionIdByProperties");
     }
 
-    getFunctionIdByNameStmt->reset();
-    getFunctionIdByNameStmt->clearBindings();
+    getFunctionIdByPropertiesStmt->reset();
+    getFunctionIdByPropertiesStmt->clearBindings();
 
     unlock();
 
@@ -233,6 +255,52 @@ int SQLWriter::getSourceLocationId(const SourceLocation &location)
 
     getSourceLocationIdStmt->reset();
     getSourceLocationIdStmt->clearBindings();
+
+    unlock();
+
+    return Id;
+}
+
+int SQLWriter::getImageIdByName(const string &name)
+{
+    lock();
+
+    int Id;
+
+    getImageIdByNameStmt << name;
+    if (getImageIdByNameStmt->stepRow()) {
+        Id = getImageIdByNameStmt->columnInt(0);
+    } else {
+        SQLWriterException("Could not find row", "getImageIdByName");
+    }
+
+    if (getImageIdByNameStmt->stepRow()) {
+        SQLWriterException("Too many rows returned", "getImageIdByName");
+    }
+
+    getImageIdByNameStmt->reset();
+    getImageIdByNameStmt->clearBindings();
+
+    unlock();
+
+    return Id;
+}
+
+int SQLWriter::functionExists(const Function & fct)
+{
+    lock();
+
+    int Id;
+
+    functionExistsStmt << fct.name << fct.prototype << fct.file << fct.line;
+    if (functionExistsStmt->stepRow()) {
+        Id = functionExistsStmt->columnInt(0);
+    } else {
+        Id = -1;
+    }
+
+    functionExistsStmt->reset();
+    functionExistsStmt->clearBindings();
 
     unlock();
 

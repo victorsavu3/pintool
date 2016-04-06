@@ -51,6 +51,7 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         break;
     case BuferEntryType::Ret:
         handleRet(entry->instruction, passed);
+        break;
     default:
         CorruptedBufferException("Invalid entry type");
     }

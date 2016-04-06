@@ -24,7 +24,11 @@ public:
     Filter filter;
 
     std::map<SourceLocation, int> sourceLocationTagInstructionIdMap;
-    std::map<ADDRINT, int> addressTagIdMap;
+
+    /* Used in Trace */
+    std::map<ADDRINT, TagBufferEntry> tagAddressesToInstrument;
+    std::map<ADDRINT, CallBufferEntry> callAddressesToInstrument;
+    std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
 
     std::vector<Tag> tags;
     std::map<int, Tag> tagIdTagMap;

@@ -10,4 +10,9 @@ static inline UINT64 rdtsc(void)
     return ( (UINT64)lo)|( ((UINT64)hi)<<32 );
 }
 
+static void inline debugger_trap(void)
+{
+    __asm__ __volatile__("int $0x03");
+}
+
 #endif // ASM_H

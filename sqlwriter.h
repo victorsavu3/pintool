@@ -17,6 +17,9 @@ public:
     SQLWriter(std::shared_ptr<SQLite::Connection> db);
     ~SQLWriter();
 
+    void begin();
+    void commit();
+
     void insertFile(File&);
     void insertImage(Image&);
     void insertFunction(Function&);
@@ -31,8 +34,11 @@ public:
 
     void insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread);
 
-    int getFunctionIdByPrototype(const std::string& name);
+    int getFunctionIdByProperties(const std::string& name, int image, const std::string& file, int line);
     int getSourceLocationId(const SourceLocation& location);
+    int getImageIdByName(const std::string& name);
+
+    int functionExists(const Function&);
 
     void setSourceLocationId(SourceLocation& location);
 
@@ -56,9 +62,15 @@ private:
 
     std::shared_ptr<SQLite::Statement> insertTagHitStmt;
 
-    std::shared_ptr<SQLite::Statement> getFunctionIdByNameStmt;
+    std::shared_ptr<SQLite::Statement> getFunctionIdByPropertiesStmt;
     std::shared_ptr<SQLite::Statement> getSourceLocationIdStmt;
     std::shared_ptr<SQLite::Statement> getSourceLocationByIdStmt;
+    std::shared_ptr<SQLite::Statement> getImageIdByNameStmt;
+
+    std::shared_ptr<SQLite::Statement> functionExistsStmt;
+
+    std::shared_ptr<SQLite::Statement> beginTransactionStmt;
+    std::shared_ptr<SQLite::Statement> commitTransactionStmt;
 
     void prepareStatements();
     void createDatabase();

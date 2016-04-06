@@ -146,6 +146,10 @@ inline bool operator==(const SourceLocation & lhs, const SourceLocation & rhs ) 
     return lhs.line == rhs.line && lhs.function == rhs.function && lhs.column == rhs.column;
 }
 
+inline bool operator!=(const SourceLocation & lhs, const SourceLocation & rhs ) {
+    return !(lhs == rhs);
+}
+
 inline bool operator<(const SourceLocation & lhs, const SourceLocation & rhs ) {
     if (lhs.line < rhs.line)
         return true;

@@ -3,6 +3,7 @@
 
 #include <map>
 #include <memory>
+#include <set>
 
 #include <pin.H>
 
@@ -42,6 +43,8 @@ VOID ImageLoad(IMG img, VOID *v)
         return;
     }
 
+    std::set<SourceLocation> foundLocations;
+    SourceLocation lastLocation;
 
     writer->insertImage(image);
 
@@ -90,7 +93,10 @@ VOID ImageLoad(IMG img, VOID *v)
 
             function.file = files[file].id;
 
-            writer->insertFunction(function);
+            function.id = writer->functionExists(function);
+
+            if (function.id == -1)
+                writer->insertFunction(function);
 
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
@@ -105,7 +111,15 @@ VOID ImageLoad(IMG img, VOID *v)
                     location.line = line;
                     location.column = column;
 
-                    writer->insertSourceLocation(location);
+                    if (location != lastLocation) {
+                        lastLocation = location;
+
+                        if (foundLocations.find(location) == foundLocations.end()) {
+                            writer->insertSourceLocation(location);
+
+                            foundLocations.insert(location);
+                        }
+                    }
                 }
             }
 
