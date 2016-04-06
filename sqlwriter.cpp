@@ -77,7 +77,7 @@ void SQLWriter::createDatabase() {
         "CREATE TABLE IF NOT EXISTS Thread(Id INTEGER PRIMARY KEY NOT NULL, Instruction INTEGER, StartTime String, EndTSC INTEGER, EndTime String);"
         "CREATE TABLE IF NOT EXISTS Instruction(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Segment INTEGER, Type INTEGER, Line INTEGER, TSC INTEGER);"
         "CREATE TABLE IF NOT EXISTS Segment(Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, Call INTEGER, Type INTEGER, LoopIteration INTEGER);"
-        "CREATE TABLE IF NOT EXISTS Call(Id INT PRIMARY KEY NOT NULL, Thread INTEGER, Function INT NOT NULL, Instruction INT NOT NULL, Start INT, End INT);"
+        "CREATE TABLE IF NOT EXISTS Call(Id INT PRIMARY KEY NOT NULL, Thread INTEGER, Function INTEGER, Instruction INTEGER, Start INTEGER, End INTEGER);"
         );
 }
 
@@ -175,7 +175,10 @@ void SQLWriter::insertCall(const Call & call)
 {
     lock();
 
-    insertCallStmt << call.id << call.thread << call.function << call.instruction << call.start << call.end;
+    if (call.instruction >= 0)
+        insertCallStmt << call.id << call.thread << call.function << call.instruction << call.start << call.end;
+    else
+        insertCallStmt << call.id << call.thread << call.function << SQLite::SQLNULL << call.start << call.end;
     insertCallStmt->execute();
 
     unlock();

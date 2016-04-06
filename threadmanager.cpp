@@ -36,6 +36,10 @@ void ThreadManager::threadStopped()
     clock_gettime(CLOCK_REALTIME, &self.endTime);
 
     manager->writer.insertThread(self);
+
+    if (!callStack.empty()) {
+        CorruptedBufferException("Thread stopped before all calls returned");
+    }
 }
 
 void ThreadManager::handleEntry(BufferEntry * entry)
@@ -115,7 +119,7 @@ void ThreadManager::handleCallEnter(ADDRINT instruction, UINT64 tsc, int functio
     c.genId();
 
     if(callStack.empty()) {
-        c.instruction = 0;
+        c.instruction = -1;
     } else {
         Instruction i;
         Segment s;
@@ -141,6 +145,9 @@ void ThreadManager::handleCallEnter(ADDRINT instruction, UINT64 tsc, int functio
 
 void ThreadManager::handleRet(ADDRINT instruction, UINT64 tsc)
 {
+    if (callStack.empty())
+        CorruptedBufferException("Found Return without call");
+
     Call c = callStack.back();
     callStack.pop_back();
 

@@ -9,6 +9,8 @@
 
 namespace SQLite {
 
+NullClass SQLNULL;
+
 Connection::Connection(const char * location, bool forceCreate) {
     if (forceCreate) {
         if( access( location, F_OK ) != -1 ) {
@@ -137,6 +139,16 @@ void Statement::bind(int pos, struct timespec val)
     snprintf(timeStringWithNanoseconds, sizeof(timeStringWithNanoseconds), "%s:%ldZ", timeString, val.tv_nsec);
 
     bind(pos, timeStringWithNanoseconds);
+}
+
+void Statement::bindNULL(int col)
+{
+    connection->lock();
+
+    if (int code = sqlite3_bind_null(this->stmt, col) != SQLITE_OK)
+        SQLiteException(this->connection.get(), code, "bindNULL");
+
+    connection->unlock();
 }
 
 void Statement::checkColumn(int col)

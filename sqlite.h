@@ -38,6 +38,9 @@ private:
     friend class Statement;
 };
 
+class NullClass{};
+extern NullClass SQLNULL;
+
 class Statement : public std::enable_shared_from_this<Statement>
 {
 public:
@@ -50,6 +53,7 @@ public:
     void bind(int, const std::string&);
     void bind(int, const char*);
     void bind(int, struct timespec);
+    void bindNULL(int);
 
     void checkColumn(int);
     int columnInt(int);
@@ -95,6 +99,12 @@ private:
     int at;
     std::shared_ptr<Statement> stmt;
 };
+
+template <> inline StatementBinder& StatementBinder::operator<< <NullClass>(const NullClass& obj) {
+    stmt->bindNULL(at++);
+
+    return *this;
+}
 
 template <typename T>
 StatementBinder operator<<(Statement& stmt, const T& obj) {
