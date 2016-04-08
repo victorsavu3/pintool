@@ -20,6 +20,7 @@ struct CallBufferEntry {
 };
 
 struct RetBufferEntry {
+    UINT32 functionId;
 };
 
 struct TagBufferEntry {

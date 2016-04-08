@@ -50,3 +50,8 @@ void SQLWriterException(string err, string context)
 
     PIN_WriteErrorMessage("SQLWriter Error", 1004, PIN_ERR_FATAL, 2, err.c_str(), context.c_str());
 }
+
+void Warn(string context, string err)
+{
+    std::cerr << context << ": " << err << std::endl;
+}

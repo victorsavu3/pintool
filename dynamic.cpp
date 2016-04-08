@@ -21,6 +21,10 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 
 BUFFER_ID bufId;
 
+void printEvent(UINT32 functionId, char* event) {
+    std::cerr << functionId << ": " << event << std::endl;
+}
+
 VOID ImageLoad(IMG img, VOID *v)
 {
     Manager* manager = (Manager*)v;
@@ -63,10 +67,11 @@ VOID ImageLoad(IMG img, VOID *v)
 
                 int functionId = manager->writer.getFunctionIdByProperties(prototype, imageId, file, line);
 
-                INS ins = RTN_InsHead(rtn);
+                INS ins = RTN_InsHeadOnly(rtn);
                 address = INS_Address(ins);
 
                 manager->callAddressesToInstrument.insert(std::make_pair(address, (CallBufferEntry){(UINT32)functionId}));
+                INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)printEvent, IARG_UINT32, (UINT32)functionId, IARG_PTR, "enter", IARG_END);
 
                 bool needsSourceScan = false;
                 for (auto it : manager->sourceLocationTagInstructionIdMap) {
@@ -100,7 +105,8 @@ VOID ImageLoad(IMG img, VOID *v)
                 for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
                 {
                     if(INS_IsRet(ins)) {
-                        manager->retAddressesToInstrument.insert(std::make_pair(address, (RetBufferEntry){}));
+                        manager->retAddressesToInstrument.insert(std::make_pair(address, (RetBufferEntry){(UINT32)functionId}));
+                        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)printEvent, IARG_UINT32, (UINT32)functionId, IARG_PTR, "return", IARG_END);
                     }
                 }
 
@@ -118,7 +124,6 @@ VOID Trace(TRACE trace, VOID *v)
 
     manager->lock();
     PIN_LockClient();
-
 
     for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
     {
@@ -142,7 +147,7 @@ VOID Trace(TRACE trace, VOID *v)
                 auto it = manager->callAddressesToInstrument.find(address);
 
                 if (it != manager->callAddressesToInstrument.end()) {
-                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                    INS_InsertFillBufferPredicated(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
                          IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
                          IARG_TSC, offsetof(struct BufferEntry, tsc),
@@ -155,10 +160,11 @@ VOID Trace(TRACE trace, VOID *v)
                 auto it = manager->retAddressesToInstrument.find(address);
 
                 if (it != manager->retAddressesToInstrument.end()) {
-                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                    INS_InsertFillBufferPredicated(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Ret), offsetof(struct BufferEntry, type),
                          IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
                          IARG_TSC, offsetof(struct BufferEntry, tsc),
+                         IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, functionId),
                          IARG_END);
                 }
             }

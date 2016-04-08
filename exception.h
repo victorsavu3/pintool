@@ -5,6 +5,7 @@
 
 void YAMLException(std::string file, std::string err);
 void CorruptedBufferException(std::string err);
+void Warn(std::string context, std::string err);
 
 namespace SQLite {
     class Connection;

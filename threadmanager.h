@@ -29,7 +29,7 @@ private:
     int lastTagHitId;
 
     void handleCallEnter(ADDRINT instruction, UINT64 tsc, int functionId);
-    void handleRet(ADDRINT instruction, UINT64 tsc);
+    void handleRet(ADDRINT instruction, UINT64 tsc, int functionId);
     std::list<Call> callStack;
 
     std::list<TagInstance> currentTagInstances;
