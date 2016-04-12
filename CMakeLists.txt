@@ -6,17 +6,26 @@ include(ExternalProject)
 ExternalProject_Add (libsqlite
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/sqlite
     BUILD_IN_SOURCE 1
-    URL https://www.sqlite.org/2016/sqlite-autoconf-3110000.tar.gz
-    CONFIGURE_COMMAND ${CMAKE_CURRENT_BINARY_DIR}/sqlite/configure
-    BUILD_COMMAND ${MAKE}
+    URL https://www.sqlite.org/2016/sqlite-amalgamation-3120000.zip
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
     BUILD_IN_SOURCE 1
     INSTALL_COMMAND ""
-    LOG_DOWNLOAD 1
-    LOG_CONFIGURE 1
-    LOG_BUILD 1)
+    LOG_DOWNLOAD 1)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/sqlite)
-link_directories(${CMAKE_CURRENT_BINARY_DIR}/sqlite/.libs)
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c DEPENDS libsqlite)
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c PROPERTIES COMPILE_FLAGS "-DSQLITE_THREADSAFE=0 -DSQLITE_DEFAULT_AUTOMATIC_INDEX=0 -DSQLITE_DEFAULT_SYNCHRONOUS=0")
+
+ExternalProject_Add (pindownload
+    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/pin
+    BUILD_IN_SOURCE 1
+    URL http://software.intel.com/sites/landingpage/pintool/downloads/pin-2.14-71313-gcc.4.4.7-linux.tar.gz
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    BUILD_IN_SOURCE 1
+    INSTALL_COMMAND ""
+    LOG_DOWNLOAD 1)
 
 ExternalProject_Add (libyamlcpp
     GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
@@ -26,27 +35,13 @@ ExternalProject_Add (libyamlcpp
     LOG_DOWNLOAD 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
-    CMAKE_ARGS "-DBUILD_SHARED_LIBS=ON")
+    CMAKE_ARGS "-DCMAKE_CXX_FLAGS=-fPIC")
 
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/libyamlcpp-prefix/src/libyamlcpp/include)
 link_directories(${CMAKE_CURRENT_BINARY_DIR}/libyamlcpp-prefix/src/libyamlcpp-build)
 
-find_path(PIN_ROOT
-  NAMES source/include/pin/pin.H
-  PATHS $ENV{PIN_ROOT}
-  DOC "Pin's base directory"
-)
-if(NOT PIN_ROOT)
-  message(FATAL_ERROR
-    "\nPin not found!\n"
-    "Please set the environment variable PIN_ROOT to the base directory"
-    " of the Pin.\n Please make sure the same pin installation is in USER or SYSTEM PATH as well"
-  )
-endif(NOT PIN_ROOT)
-message(STATUS "PIN_ROOT: ${PIN_ROOT}")
-
-message(STATUS ${CMAKE_C_COMPILER_VERSION} )
+set(PIN_ROOT ${CMAKE_CURRENT_BINARY_DIR}/pin)
 
 set(PIN_INCLUDE_DIRS
   ${PIN_ROOT}/extras/xed-intel64/include
@@ -65,7 +60,7 @@ set(PIN_LIBRARY_DIRS
 include_directories(${PIN_INCLUDE_DIRS})
 link_directories (${PIN_LIBRARY_DIRS})
 
-set(SRC_LIST_COMMON sqlwriter sqlite filter exception)
+set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
 set(SRC_LIST_DYNAMIC asm.h buffer dynamic manager entities threadmanager ${SRC_LIST_COMMON})
 
