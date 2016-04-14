@@ -136,7 +136,7 @@ void Statement::bind(int pos, struct timespec val)
     gmtime_r(&(val.tv_sec), &t);
 
     strftime(timeString, sizeof(timeString), "%FT%T", &t);
-    snprintf(timeStringWithNanoseconds, sizeof(timeStringWithNanoseconds), "%s:%ldZ", timeString, val.tv_nsec);
+    snprintf(timeStringWithNanoseconds, sizeof(timeStringWithNanoseconds), "%s.%ldZ", timeString, val.tv_nsec);
 
     bind(pos, timeStringWithNanoseconds);
 }

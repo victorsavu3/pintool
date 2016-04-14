@@ -21,14 +21,6 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 
 BUFFER_ID bufId;
 
-void printEvent(UINT32 functionId, char* event) {
-    std::cerr << "Dynamic: " << functionId << ": " << event << std::endl;
-}
-
-void printBufferEvent(UINT32 functionId, char* event) {
-    std::cerr << "Buffer: " << functionId << ": " << event << std::endl;
-}
-
 VOID ImageLoad(IMG img, VOID *v)
 {
     Manager* manager = (Manager*)v;
@@ -75,7 +67,6 @@ VOID ImageLoad(IMG img, VOID *v)
                 address = INS_Address(ins);
 
                 manager->callAddressesToInstrument.insert(std::make_pair(address, (CallBufferEntry){(UINT32)functionId}));
-                INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)printEvent, IARG_UINT32, (UINT32)functionId, IARG_PTR, "enter", IARG_END);
 
                 bool needsSourceScan = false;
                 for (auto it : manager->sourceLocationTagInstructionIdMap) {
@@ -170,8 +161,6 @@ VOID Trace(TRACE trace, VOID *v)
                          IARG_TSC, offsetof(struct BufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, functionId),
                          IARG_END);
-
-                    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)printEvent, IARG_UINT32, static_cast<UINT32>(it->second.functionId), IARG_PTR, "return", IARG_END);
                 }
             }
         }
@@ -202,16 +191,6 @@ VOID * BufferFull(BUFFER_ID, THREADID tid, const CONTEXT *, void *buffer,
     struct BufferEntry* entries = (struct BufferEntry*) buffer;
 
     manager->bufferFull(entries, n, tid );
-
-    for(UINT32 i = 0; i < n; i++)
-        switch(entries[i].type) {
-            case BuferEntryType::Call:
-                printBufferEvent(entries[i].data.call.functionId, "Call");
-                break;
-            case BuferEntryType::Ret:
-                printBufferEvent(entries[i].data.ret.functionId, "Return");
-                break;
-        }
 
     return buffer;
 }
