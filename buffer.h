@@ -31,9 +31,9 @@ struct TagBufferEntry {
 };
 
 struct MemRefBufferEntry {
-    ADDRINT ref;
+    ADDRINT address;
     UINT32 size;
-    bool isRead;
+    BOOL isRead;
 };
 
 struct AllocEnterBufferEntry {

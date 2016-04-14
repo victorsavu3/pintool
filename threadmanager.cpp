@@ -54,6 +54,9 @@ void ThreadManager::handleEntry(BufferEntry * entry)
     case BuferEntryType::Ret:
         handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
         break;
+    case BuferEntryType::MemRef:
+        handleMemRef(entry->data.memref.address, entry->data.memref.size, entry->data.memref.isRead);
+        break;
     default:
         CorruptedBufferException("Invalid entry type");
     }
@@ -122,13 +125,8 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
         c.instruction = -1;
     } else {
         Instruction i;
-        Segment s;
 
-        s.call = callStack.back().id;
-        s.type = SegmentType::Standard;
-        manager->writer.insertSegment(s);
-
-        i.segment = s.id;
+        i.segment = callStack.back().second;
         i.type = InstructionType::Call;
         manager->writer.insertInstruction(i);
 
@@ -145,7 +143,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
     s.type = SegmentType::Standard;
     manager->writer.insertSegment(s);
 
-    callStack.push_back(c);
+    callStack.push_back(std::make_pair(c, s.id));
 }
 
 void ThreadManager::handleRet(UINT64 tsc, int functionId)
@@ -153,7 +151,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     if (callStack.empty())
         CorruptedBufferException("Return from empty callstack");
 
-    Call c = callStack.back();
+    Call c = callStack.back().first;
 
     while (c.function != functionId && !callStack.empty()) {
         std::ostringstream oss;
@@ -163,7 +161,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
         Warn("handleRet", oss.str());
 
         callStack.pop_back();
-        c = callStack.back();
+        c = callStack.back().first;
     }
 
     if (callStack.empty())
@@ -174,6 +172,15 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     c.end = tsc;
 
     manager->writer.insertCall(c);
+}
+
+void ThreadManager::handleMemRef(ADDRINT address, UINT32 size, BOOL isRead)
+{
+    Instruction i;
+
+    i.segment = callStack.back().second;
+    i.type = InstructionType::Access;
+    manager->writer.insertInstruction(i);
 }
 
 std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)

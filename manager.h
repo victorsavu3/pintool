@@ -30,6 +30,13 @@ public:
     std::map<ADDRINT, CallBufferEntry> callAddressesToInstrument;
     std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
 
+    struct AccessStaticData {
+        UINT32 size;
+        BOOL isRead;
+        UINT32 memOp;
+    };
+    std::multimap<ADDRINT, AccessStaticData> accessToInstrument;
+
     std::vector<Tag> tags;
     std::map<int, Tag> tagIdTagMap;
 

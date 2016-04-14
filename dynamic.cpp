@@ -99,9 +99,35 @@ VOID ImageLoad(IMG img, VOID *v)
 
                 for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
                 {
+                    ADDRINT address = INS_Address(ins);
+
                     if(INS_IsRet(ins)) {
-                        address = INS_Address(ins);
                         manager->retAddressesToInstrument.insert(std::make_pair(address, (RetBufferEntry){(UINT32)functionId}));
+                    }
+
+                    if (INS_IsStandardMemop(ins) || INS_HasMemoryVector(ins))
+                    {
+                        UINT32 memoryOperandCount = INS_MemoryOperandCount(ins);
+
+                        for (UINT32 memOp = 0; memOp < memoryOperandCount; memOp++)
+                        {
+                            Manager::AccessStaticData entry;
+
+                            entry.size = INS_MemoryOperandSize(ins, memOp);
+                            entry.memOp = memOp;
+
+                            if (INS_MemoryOperandIsRead(ins, memOp)) {
+                                entry.isRead = true;
+
+                                manager->accessToInstrument.insert(std::make_pair(address, entry));
+                            }
+
+                            if (INS_MemoryOperandIsWritten(ins, memOp)) {
+                                entry.isRead = false;
+
+                                manager->accessToInstrument.insert(std::make_pair(address, entry));
+                            }
+                        }
                     }
                 }
 
@@ -141,7 +167,7 @@ VOID Trace(TRACE trace, VOID *v)
                 auto it = manager->callAddressesToInstrument.find(address);
 
                 if (it != manager->callAddressesToInstrument.end()) {
-                    INS_InsertFillBufferPredicated(ins, IPOINT_BEFORE, bufId,
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, functionId),
@@ -153,10 +179,23 @@ VOID Trace(TRACE trace, VOID *v)
                 auto it = manager->retAddressesToInstrument.find(address);
 
                 if (it != manager->retAddressesToInstrument.end()) {
-                    INS_InsertFillBufferPredicated(ins, IPOINT_BEFORE, bufId,
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Ret), offsetof(struct BufferEntry, type),
                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, functionId),
+                         IARG_END);
+                }
+            }
+
+            {
+                auto range = manager->accessToInstrument.equal_range(address);
+
+                for(auto it = range.first; it != range.second; it++) {
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                         IARG_UINT32, it->second.size, offsetof(struct BufferEntry, data) + offsetof(struct MemRefBufferEntry, size),
+                         IARG_BOOL, it->second.isRead, offsetof(struct BufferEntry, data) + offsetof(struct MemRefBufferEntry, isRead),
+                         IARG_MEMORYOP_EA, it->second.memOp, offsetof(struct BufferEntry, data) + offsetof(struct MemRefBufferEntry, address),
                          IARG_END);
                 }
             }

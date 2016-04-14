@@ -30,7 +30,9 @@ private:
 
     void handleCallEnter(UINT64 tsc, int functionId);
     void handleRet(UINT64 tsc, int functionId);
-    std::list<Call> callStack;
+    std::list<std::pair<Call, int> > callStack;
+
+    void handleMemRef(ADDRINT address, UINT32 size, BOOL isRead);
 
     std::list<TagInstance> currentTagInstances;
     std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);
