@@ -13,8 +13,8 @@
 class SQLWriter
 {
 public:
-    SQLWriter(const std::string& file, bool forceCreate = false);
-    SQLWriter(std::shared_ptr<SQLite::Connection> db);
+    SQLWriter(const std::string& file, bool createDb = false);
+    SQLWriter(std::shared_ptr<SQLite::Connection> db, bool createDb = false);
     ~SQLWriter();
 
     void begin();
@@ -74,6 +74,7 @@ private:
 
     void prepareStatements();
     void createDatabase();
+    void runPragmas();
 
     void lock();
     void unlock();

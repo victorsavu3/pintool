@@ -2,19 +2,29 @@
 
 #include "exception.h"
 
-SQLWriter::SQLWriter(const std::string& file, bool forceCreate) : db(std::make_shared<SQLite::Connection>(file.c_str(), forceCreate)) {
+SQLWriter::SQLWriter(const std::string& file, bool createDb) : db(std::make_shared<SQLite::Connection>(file.c_str(), createDb)) {
     PIN_MutexInit(&mutex);
 
-    createDatabase();
+    runPragmas();
+
+    if (createDb) {
+        createDatabase();
+    }
+
     prepareStatements();
 
     begin();
 }
 
-SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db) : db(db) {
+SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db, bool createDb) : db(db) {
     PIN_MutexInit(&mutex);
 
-    createDatabase();
+    runPragmas();
+
+    if (createDb) {
+        createDatabase();
+    }
+
     prepareStatements();
 
     begin();
@@ -49,9 +59,9 @@ void SQLWriter::prepareStatements() {
 
 SQLWriter::~SQLWriter()
 {
-    PIN_MutexFini(&mutex);
-
     commit();
+
+    PIN_MutexFini(&mutex);
 }
 
 void SQLWriter::begin()
@@ -66,7 +76,13 @@ void SQLWriter::commit()
 
 void SQLWriter::createDatabase() {
     this->db->execute(
-            #include "create.sql"
+            #include "create.sql.h"
+        );
+}
+
+void SQLWriter::runPragmas() {
+    this->db->execute(
+            #include "writePragmas.sql.h"
         );
 }
 

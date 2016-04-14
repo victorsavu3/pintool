@@ -3,6 +3,7 @@
 
 #include <string>
 #include <functional>
+#include <tuple>
 
 #include <time.h>
 
@@ -146,7 +147,7 @@ namespace std {
 
 
 inline bool operator==(const SourceLocation & lhs, const SourceLocation & rhs ) {
-    return lhs.line == rhs.line && lhs.function == rhs.function && lhs.column == rhs.column;
+    return std::tie(lhs.function, lhs.line, lhs.column) == std::tie(rhs.function, rhs.line, rhs.column);
 }
 
 inline bool operator!=(const SourceLocation & lhs, const SourceLocation & rhs ) {
@@ -154,16 +155,7 @@ inline bool operator!=(const SourceLocation & lhs, const SourceLocation & rhs ) 
 }
 
 inline bool operator<(const SourceLocation & lhs, const SourceLocation & rhs ) {
-    if (lhs.line < rhs.line)
-        return true;
-
-    if (lhs.column < rhs.column)
-        return true;
-
-    if (lhs.function < rhs.function)
-        return true;
-
-    return false;
+    return std::tie(lhs.function, lhs.line, lhs.column) < std::tie(rhs.function, rhs.line, rhs.column);
 }
 
 #endif // ENTITIES_H

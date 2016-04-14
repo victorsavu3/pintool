@@ -15,7 +15,7 @@ ExternalProject_Add (libsqlite
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/sqlite)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c DEPENDS libsqlite)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c PROPERTIES COMPILE_FLAGS "-DSQLITE_THREADSAFE=0 -DSQLITE_DEFAULT_AUTOMATIC_INDEX=0 -DSQLITE_DEFAULT_SYNCHRONOUS=0")
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c PROPERTIES COMPILE_FLAGS "-DSQLITE_THREADSAFE=0")
 
 ExternalProject_Add (pindownload
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/pin
@@ -60,7 +60,31 @@ set(PIN_LIBRARY_DIRS
 include_directories(${PIN_INCLUDE_DIRS})
 link_directories (${PIN_LIBRARY_DIRS})
 
-set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c)
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/create.sql
+    COMMAND echo "R\\\"=====\\\(" > ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
+    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/create.sql >> ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
+    COMMAND echo "\\\)=====\\\"" >> ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/writePragmas.sql
+    COMMAND echo "R\\\"=====\\\(" > ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/writePragmas.sql >> ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+    COMMAND echo "\\\)=====\\\"" >> ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+)
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/sqlwriter.cpp
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+)
+set_source_files_properties(sqlwriter.cpp PROPERTIES GENERATED FALSE)
+
+set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c create.sql writePragmas.sql)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
 set(SRC_LIST_DYNAMIC asm.h buffer dynamic manager entities threadmanager ${SRC_LIST_COMMON})
 
@@ -71,7 +95,7 @@ add_definitions(-DTARGET_IA32E -DHOST_IA32E -DTARGET_LINUX)
 set(CMAKE_CXX_FLAGS "-g -fPIC -Wl,-Bsymbolic -std=c++11")
 
 add_dependencies(${PROJECT_NAME}_static libsqlite)
-target_link_libraries(${PROJECT_NAME}_static "pin" "pindwarf" "pinvm" "z" "sqlite3" "yaml-cpp" "dl" "rt")
+target_link_libraries(${PROJECT_NAME}_static "pin" "pindwarf" "pinvm" "z" "yaml-cpp" "dl" "rt")
 
 add_dependencies(${PROJECT_NAME}_dynamic libsqlite)
-target_link_libraries(${PROJECT_NAME}_dynamic "pin" "pindwarf" "pinvm" "z" "sqlite3" "yaml-cpp" "dl" "rt")
+target_link_libraries(${PROJECT_NAME}_dynamic "pin" "pindwarf" "pinvm" "z" "yaml-cpp" "dl" "rt")

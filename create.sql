@@ -1,5 +1,3 @@
-R"=====(
-
 CREATE TABLE Access(
   Id INTEGER PRIMARY KEY NOT NULL,
   Instruction INTEGER,
@@ -53,8 +51,7 @@ CREATE TABLE Instruction(
   Line INTEGER,
   Column INTEGER,
   TSC INTEGER,
-  FOREIGN KEY(Segment) REFERENCES Segment(Id),
-  CONSTRAINT UniqueInstructionTime UNIQUE (TSC)
+  FOREIGN KEY(Segment) REFERENCES Segment(Id)
 );
 
 CREATE TABLE Loop(
@@ -162,5 +159,3 @@ CREATE TABLE Thread(
   EndTime VARCHAR,
   FOREIGN KEY(Instruction) REFERENCES Instruction(Id)
 );
-
-)====="
