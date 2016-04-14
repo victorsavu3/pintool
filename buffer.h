@@ -17,14 +17,17 @@ enum class BuferEntryType : UINT32 {
 
 struct CallBufferEntry {
     UINT32 functionId;
+    UINT64 tsc;
 };
 
 struct RetBufferEntry {
     UINT32 functionId;
+    UINT64 tsc;
 };
 
 struct TagBufferEntry {
     UINT32 tagId;
+    UINT64 tsc;
 };
 
 struct MemRefBufferEntry {
@@ -58,8 +61,6 @@ union BufferEntryUnion {
 
 struct BufferEntry {
     BuferEntryType type;
-    ADDRINT instruction;
-    UINT64 tsc;
 
     BufferEntryUnion data;
 };

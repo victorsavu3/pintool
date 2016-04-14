@@ -47,10 +47,10 @@ void SQLWriter::prepareStatements() {
     insertTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Id, Tag, Start, End, Thread, Counter) VALUES(?, ?, ?, ?, ?, ?);");
     insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, Instruction, StartTime, EndTSC, EndTime) VALUES(?, ?, ?, ?, ?);");
     insertCallStmt = this->db->makeStatement("INSERT INTO Call(Id, Thread, Function, Instruction, Start, End) VALUES(?, ?, ?, ?, ?, ?);");
-    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Address, Segment, Type, TSC) VALUES(?, ?, ?, ?);");
+    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type) VALUES(?, ?);");
     insertSegmentStmt = this->db->makeStatement("INSERT INTO Segment(Call, Type) VALUES(?, ?);");
 
-    insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(Address, TSC, TagInstruction, Thread) VALUES(?, ?, ?, ?);");
+    insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(TSC, TagInstruction, Thread) VALUES(?, ?, ?);");
 
     getFunctionIdByPropertiesStmt = this->db->makeStatement("SELECT Id FROM Function WHERE Prototype = ? AND File = (SELECT Id FROM File WHERE Image = ? AND Path = ?) AND Line = ?");
     getSourceLocationIdStmt = this->db->makeStatement("SELECT Id FROM SourceLocation WHERE Function = ? AND Line = ? AND Column = ?");
@@ -213,17 +213,17 @@ void SQLWriter::insertInstruction(Instruction & instruction)
 {
     lock();
 
-    insertInstructionStmt << instruction.address << instruction.segment << static_cast<int>(instruction.type) << instruction.tsc;
+    insertInstructionStmt << instruction.segment << static_cast<int>(instruction.type);
     instruction.id = insertInstructionStmt->executeInsert();
 
     unlock();
 }
 
-void SQLWriter::insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread)
+void SQLWriter::insertTagHit(UINT64 tsc, int tagId, int thread)
 {
     lock();
 
-    insertTagHitStmt << address << tsc << tagId << thread;
+    insertTagHitStmt << tsc << tagId << thread;
     insertTagHitStmt->execute();
 
     unlock();

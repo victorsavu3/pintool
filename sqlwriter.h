@@ -32,7 +32,7 @@ public:
     void insertSegment(Segment&);
     void insertInstruction(Instruction&);
 
-    void insertTagHit(ADDRINT address, UINT64 tsc, int tagId, int thread);
+    void insertTagHit(UINT64 tsc, int tagId, int thread);
 
     int getFunctionIdByProperties(const std::string& name, int image, const std::string& file, int line);
     int getSourceLocationId(const SourceLocation& location);

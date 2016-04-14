@@ -131,8 +131,7 @@ VOID Trace(TRACE trace, VOID *v)
                 if (it != manager->tagAddressesToInstrument.end()) {
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
-                         IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
-                         IARG_TSC, offsetof(struct BufferEntry, tsc),
+                         IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.tagId), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
                          IARG_END);
                 }
@@ -144,8 +143,7 @@ VOID Trace(TRACE trace, VOID *v)
                 if (it != manager->callAddressesToInstrument.end()) {
                     INS_InsertFillBufferPredicated(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
-                         IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
-                         IARG_TSC, offsetof(struct BufferEntry, tsc),
+                         IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, functionId),
                          IARG_END);
                 }
@@ -157,8 +155,7 @@ VOID Trace(TRACE trace, VOID *v)
                 if (it != manager->retAddressesToInstrument.end()) {
                     INS_InsertFillBufferPredicated(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Ret), offsetof(struct BufferEntry, type),
-                         IARG_INST_PTR, offsetof(struct BufferEntry, instruction),
-                         IARG_TSC, offsetof(struct BufferEntry, tsc),
+                         IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, functionId),
                          IARG_END);
                 }
@@ -226,7 +223,7 @@ int main(int argc, char * argv[])
 
     if (PIN_Init(argc, argv)) return Usage();
 
-    bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 5,
+    bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 100000,
                 BufferFull, (void*)manager);
 
     if(bufId == BUFFER_ID_INVALID)

@@ -119,10 +119,8 @@ enum class InstructionType {
     Call    = 0,
     Access  = 1,
     Alloc   = 2,
-    Free    = 3,
-    Enter   = 4,
-    Return  = 5
-  };
+    Free    = 3
+};
 
 class Instruction {
 public:
@@ -130,8 +128,6 @@ public:
 
     InstructionType type;
     int segment;
-    UINT64 tsc;
-    ADDRINT address;
 };
 
 namespace std {

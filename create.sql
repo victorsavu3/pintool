@@ -45,12 +45,10 @@ CREATE TABLE Image (
 
 CREATE TABLE Instruction(
   Id INTEGER PRIMARY KEY NOT NULL,
-  Address INTEGER,
   Segment INTEGER,
   Type INTEGER,
   Line INTEGER,
   Column INTEGER,
-  TSC INTEGER,
   FOREIGN KEY(Segment) REFERENCES Segment(Id)
 );
 
@@ -121,7 +119,6 @@ CREATE TABLE Tag (
 
 CREATE TABLE TagHit(
   Id INTEGER PRIMARY KEY NOT NULL,
-  Address INTEGER,
   TSC INTEGER,
   TagInstruction INTEGER,
   Thread INTEGER,

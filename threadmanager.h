@@ -25,11 +25,11 @@ private:
 
     void handleEntry(struct BufferEntry*);
 
-    void handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructionId);
+    void handleTag(UINT64 tsc, int tagInstructionId);
     int lastTagHitId;
 
-    void handleCallEnter(ADDRINT instruction, UINT64 tsc, int functionId);
-    void handleRet(ADDRINT instruction, UINT64 tsc, int functionId);
+    void handleCallEnter(UINT64 tsc, int functionId);
+    void handleRet(UINT64 tsc, int functionId);
     std::list<Call> callStack;
 
     std::list<TagInstance> currentTagInstances;

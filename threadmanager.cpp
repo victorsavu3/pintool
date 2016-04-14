@@ -44,17 +44,15 @@ void ThreadManager::threadStopped()
 
 void ThreadManager::handleEntry(BufferEntry * entry)
 {
-    UINT64 passed = entry->tsc - startTSC;
-
     switch (entry->type) {
     case BuferEntryType::Tag:
-        handleTag(entry->instruction, passed, entry->data.tag.tagId);
+        handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId);
         break;
     case BuferEntryType::Call:
-        handleCallEnter(entry->instruction, passed, entry->data.call.functionId);
+        handleCallEnter(entry->data.call.tsc - this->startTSC, entry->data.call.functionId);
         break;
     case BuferEntryType::Ret:
-        handleRet(entry->instruction, passed, entry->data.ret.functionId);
+        handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
         break;
     default:
         CorruptedBufferException("Invalid entry type");
@@ -63,14 +61,14 @@ void ThreadManager::handleEntry(BufferEntry * entry)
 
 #include <sstream>
 
-void ThreadManager::handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructionId)
+void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
 {
     if (tagInstructionId == lastTagHitId)
         return;
 
     lastTagHitId = tagInstructionId;
 
-    manager->writer.insertTagHit(instruction, tsc, tagInstructionId, self.id);
+    manager->writer.insertTagHit(tsc, tagInstructionId, self.id);
 
     TagInstruction& tagInstruction = manager->tagInstructionIdMap[tagInstructionId];
     Tag& tag = manager->tagIdTagMap[tagInstruction.tag];
@@ -115,7 +113,7 @@ void ThreadManager::handleTag(ADDRINT instruction, UINT64 tsc, int tagInstructio
     }
 }
 
-void ThreadManager::handleCallEnter(ADDRINT instruction, UINT64 tsc, int functionId)
+void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
 {
     Call c;
     c.genId();
@@ -132,7 +130,6 @@ void ThreadManager::handleCallEnter(ADDRINT instruction, UINT64 tsc, int functio
 
         i.segment = s.id;
         i.type = InstructionType::Call;
-        i.tsc = tsc;
         manager->writer.insertInstruction(i);
 
         c.instruction = i.id;
@@ -148,17 +145,10 @@ void ThreadManager::handleCallEnter(ADDRINT instruction, UINT64 tsc, int functio
     s.type = SegmentType::Standard;
     manager->writer.insertSegment(s);
 
-    Instruction i;
-
-    i.segment = s.id;
-    i.type = InstructionType::Enter;
-    i.tsc = tsc;
-    manager->writer.insertInstruction(i);
-
     callStack.push_back(c);
 }
 
-void ThreadManager::handleRet(ADDRINT instruction, UINT64 tsc, int functionId)
+void ThreadManager::handleRet(UINT64 tsc, int functionId)
 {
     if (callStack.empty())
         CorruptedBufferException("Return from empty callstack");
@@ -184,19 +174,6 @@ void ThreadManager::handleRet(ADDRINT instruction, UINT64 tsc, int functionId)
     c.end = tsc;
 
     manager->writer.insertCall(c);
-
-    Segment s;
-
-    s.call = c.id;
-    s.type = SegmentType::Standard;
-    manager->writer.insertSegment(s);
-
-    Instruction i;
-
-    i.segment = s.id;
-    i.type = InstructionType::Return;
-    i.tsc = tsc;
-    manager->writer.insertInstruction(i);
 }
 
 std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)
