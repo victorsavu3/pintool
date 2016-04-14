@@ -75,6 +75,7 @@ private:
     void prepareStatements();
     void createDatabase();
     void runPragmas();
+    void clearDatabase();
 
     void lock();
     void unlock();

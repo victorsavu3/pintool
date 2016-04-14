@@ -1,0 +1,14 @@
+DELETE FROM Access;
+DELETE FROM Call;
+DELETE FROM Instruction;
+DELETE FROM Loop;
+DELETE FROM LoopExecution;
+DELETE FROM LoopIteration;
+DELETE FROM Member;
+DELETE FROM Reference;
+DELETE FROM Segment;
+DELETE FROM Tag;
+DELETE FROM TagHit;
+DELETE FROM TagInstance;
+DELETE FROM TagInstruction;
+DELETE FROM Thread;

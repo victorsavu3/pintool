@@ -11,6 +11,8 @@ SQLWriter::SQLWriter(const std::string& file, bool createDb) : db(std::make_shar
         createDatabase();
     }
 
+    clearDatabase();
+
     prepareStatements();
 
     begin();
@@ -24,6 +26,8 @@ SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db, bool createDb) : db
     if (createDb) {
         createDatabase();
     }
+
+    clearDatabase();
 
     prepareStatements();
 
@@ -83,6 +87,12 @@ void SQLWriter::createDatabase() {
 void SQLWriter::runPragmas() {
     this->db->execute(
             #include "writePragmas.sql.h"
+        );
+}
+
+void SQLWriter::clearDatabase() {
+    this->db->execute(
+            #include "clear.sql.h"
         );
 }
 

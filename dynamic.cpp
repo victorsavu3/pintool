@@ -22,7 +22,11 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 BUFFER_ID bufId;
 
 void printEvent(UINT32 functionId, char* event) {
-    std::cerr << functionId << ": " << event << std::endl;
+    std::cerr << "Dynamic: " << functionId << ": " << event << std::endl;
+}
+
+void printBufferEvent(UINT32 functionId, char* event) {
+    std::cerr << "Buffer: " << functionId << ": " << event << std::endl;
 }
 
 VOID ImageLoad(IMG img, VOID *v)
@@ -105,8 +109,8 @@ VOID ImageLoad(IMG img, VOID *v)
                 for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
                 {
                     if(INS_IsRet(ins)) {
+                        address = INS_Address(ins);
                         manager->retAddressesToInstrument.insert(std::make_pair(address, (RetBufferEntry){(UINT32)functionId}));
-                        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)printEvent, IARG_UINT32, (UINT32)functionId, IARG_PTR, "return", IARG_END);
                     }
                 }
 
@@ -166,6 +170,8 @@ VOID Trace(TRACE trace, VOID *v)
                          IARG_TSC, offsetof(struct BufferEntry, tsc),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, functionId),
                          IARG_END);
+
+                    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)printEvent, IARG_UINT32, static_cast<UINT32>(it->second.functionId), IARG_PTR, "return", IARG_END);
                 }
             }
         }
@@ -196,6 +202,16 @@ VOID * BufferFull(BUFFER_ID, THREADID tid, const CONTEXT *, void *buffer,
     struct BufferEntry* entries = (struct BufferEntry*) buffer;
 
     manager->bufferFull(entries, n, tid );
+
+    for(UINT32 i = 0; i < n; i++)
+        switch(entries[i].type) {
+            case BuferEntryType::Call:
+                printBufferEvent(entries[i].data.call.functionId, "Call");
+                break;
+            case BuferEntryType::Ret:
+                printBufferEvent(entries[i].data.ret.functionId, "Return");
+                break;
+        }
 
     return buffer;
 }
@@ -231,7 +247,7 @@ int main(int argc, char * argv[])
 
     if (PIN_Init(argc, argv)) return Usage();
 
-    bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 100,
+    bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 5,
                 BufferFull, (void*)manager);
 
     if(bufId == BUFFER_ID_INVALID)

@@ -76,15 +76,23 @@ add_custom_command(
     COMMAND echo "\\\)=====\\\"" >> ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
 )
 
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/clear.sql
+    COMMAND echo "R\\\"=====\\\(" > ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h
+    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/clear.sql >> ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h
+    COMMAND echo "\\\)=====\\\"" >> ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h
+)
+
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/sqlwriter.cpp
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h
 )
 set_source_files_properties(sqlwriter.cpp PROPERTIES GENERATED FALSE)
 
-set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c create.sql writePragmas.sql)
+set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c create.sql writePragmas.sql clear.sql)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
 set(SRC_LIST_DYNAMIC asm.h buffer dynamic manager entities threadmanager ${SRC_LIST_COMMON})
 
