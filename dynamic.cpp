@@ -81,7 +81,7 @@ VOID ImageLoad(IMG img, VOID *v)
                     for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
                     {
                         address = INS_Address(ins);
-                        PIN_GetSourceLocation(address, &column, &line, &file);
+                        PIN_GetSourceLocation(address, &column, &line, NULL);
 
                         SourceLocation location;
 
@@ -110,9 +110,12 @@ VOID ImageLoad(IMG img, VOID *v)
                     {
                         UINT32 memoryOperandCount = INS_MemoryOperandCount(ins);
 
+                        if (memoryOperandCount == 0)
+                            continue;
+
                         AccessInstructionDetails entry;
                         entry.accesses.reserve(memoryOperandCount);
-                        entry.details = manager->getLocation(address, functionId);
+                        entry.location = manager->getLocation(address, functionId);
 
                         for (UINT32 memOp = 0; memOp < memoryOperandCount; memOp++)
                         {
@@ -125,8 +128,8 @@ VOID ImageLoad(IMG img, VOID *v)
                         }
 
                         manager->accessDetails.push_back(entry);
-                        AccessInstructionDetails* detailPtr = &(manager->accessDetails[manager->accessDetails.size() - 1]);
-                        manager->accessToInstrument.insert(std::make_pair(address, (AccessInstructionBufferEntry) {(ADDRINT)detailPtr}));
+
+                        manager->accessToInstrument.insert(std::make_pair(address, manager->accessDetails.size() - 1));
                     }
 
                     if (INS_IsCall(ins)) {
@@ -175,7 +178,7 @@ VOID Trace(TRACE trace, VOID *v)
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallInstructionBufferEntry, tsc),
-                         IARG_ADDRINT, it->second, offsetof(struct BufferEntry, data) + offsetof(struct CallInstructionBufferEntry, location),
+                         IARG_UINT32, it->second, offsetof(struct BufferEntry, data) + offsetof(struct CallInstructionBufferEntry, location),
                          IARG_END);
                 }
             }
@@ -187,6 +190,7 @@ VOID Trace(TRACE trace, VOID *v)
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::CallEnter), offsetof(struct BufferEntry, type),
                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, functionId),
+                         IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, tsc),
                          IARG_END);
                 }
             }
@@ -207,31 +211,84 @@ VOID Trace(TRACE trace, VOID *v)
                 auto it = manager->accessToInstrument.find(address);
 
                 if (it != manager->accessToInstrument.end()) {
-                    AccessInstructionDetails* detailPtr = (AccessInstructionDetails*)it->second.accessDetails;
+                    AccessInstructionDetails& detail = manager->accessDetails[it->second];
+                    AccessInstructionDetails* detailPtr = &detail;
 
-                    switch(detailPtr->accesses.size()) {
+                    switch(detail.accesses.size()) {
                     case 1:
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
-                             IARG_ADDRINT, it->second.accessDetails, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                              IARG_END);
                         break;
                     case 2:
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
-                             IARG_ADDRINT, it->second.accessDetails, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    case 3:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    case 4:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 3, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 3 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    case 5:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 3, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 3 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 4, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 4 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    case 6:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 3, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 3 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 4, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 4 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 5, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 5 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    case 7:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 3, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 3 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 4, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 4 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 5, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 5 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 6, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 6 * sizeof(ADDRINT),
                              IARG_END);
                         break;
                     default:
                         UnimplementedException("Too many memory operations per instruction");
                         break;
                     }
-
-
-
                 }
             }
         }

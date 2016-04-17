@@ -47,7 +47,7 @@ void SQLWriter::prepareStatements() {
     insertTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Id, Tag, Start, End, Thread, Counter) VALUES(?, ?, ?, ?, ?, ?);");
     insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, Instruction, StartTime, EndTSC, EndTime) VALUES(?, ?, ?, ?, ?);");
     insertCallStmt = this->db->makeStatement("INSERT INTO Call(Id, Thread, Function, Instruction, Start, End) VALUES(?, ?, ?, ?, ?, ?);");
-    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type) VALUES(?, ?);");
+    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type, Line, Column) VALUES(?, ?, ?, ?);");
     insertSegmentStmt = this->db->makeStatement("INSERT INTO Segment(Call, Type) VALUES(?, ?);");
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(TSC, TagInstruction, Thread) VALUES(?, ?, ?);");
@@ -213,7 +213,7 @@ void SQLWriter::insertInstruction(Instruction & instruction)
 {
     lock();
 
-    insertInstructionStmt << instruction.segment << static_cast<int>(instruction.type);
+    insertInstructionStmt << instruction.segment << static_cast<int>(instruction.type) << instruction.line << instruction.column;
     instruction.id = insertInstructionStmt->executeInsert();
 
     unlock();

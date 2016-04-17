@@ -32,7 +32,7 @@ struct MemoryOperationDetails {
 
 struct AccessInstructionDetails {
     std::vector<MemoryOperationDetails> accesses;
-    LocationDetails* details;
+    int location;
 };
 
 class Manager
@@ -47,7 +47,7 @@ public:
 
     /* Buffer optimization */
     std::vector<LocationDetails> locationDetails;
-    LocationDetails* getLocation(ADDRINT address, int functionId);
+    int getLocation(ADDRINT address, int functionId);
 
     /* Used in Trace */
     std::map<ADDRINT, TagBufferEntry> tagAddressesToInstrument;
@@ -55,7 +55,7 @@ public:
     std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
     std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
 
-    std::map<ADDRINT, AccessInstructionBufferEntry> accessToInstrument;
+    std::map<ADDRINT, int> accessToInstrument;
     std::vector<AccessInstructionDetails> accessDetails;
 
     std::vector<Tag> tags;

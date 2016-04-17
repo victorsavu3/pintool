@@ -17,12 +17,13 @@ enum class BuferEntryType : UINT32 {
 };
 
 struct CallInstructionBufferEntry {
-    ADDRINT location;
+    UINT32 location;
     UINT64 tsc;
 };
 
 struct CallEnterBufferEntry {
     UINT32 functionId;
+    UINT64 tsc;
 };
 
 struct RetBufferEntry {

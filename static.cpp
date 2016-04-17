@@ -102,7 +102,7 @@ VOID ImageLoad(IMG img, VOID *v)
             {
                 address = INS_Address(ins);
 
-                PIN_GetSourceLocation(address, &column, &line, &file);
+                PIN_GetSourceLocation(address, &column, &line, NULL);
 
                 if(file.length() > 0) {
                     SourceLocation location;

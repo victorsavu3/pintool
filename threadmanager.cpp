@@ -49,17 +49,15 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId);
         break;
     case BuferEntryType::Call:
-        handleLocation((LocationDetails*)entry->data.callInstruction.location);
-        handleCall(entry->data.callInstruction.tsc - this->startTSC, (LocationDetails*)entry->data.callInstruction.location);
+        handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location);
         break;
     case BuferEntryType::CallEnter:
-        handleCallEnter(entry->data.callEnter.functionId);
+        handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId);
         break;
     case BuferEntryType::Ret:
         handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
         break;
     case BuferEntryType::MemRef:
-        handleLocation(((AccessInstructionDetails*)entry->data.memref.accessDetails)->details);
         handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
         break;
     default:
@@ -121,32 +119,34 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
     }
 }
 
-void ThreadManager::handleCall(UINT64 tsc, LocationDetails* location) {
+void ThreadManager::handleCall(UINT64 tsc, int location) {
     lastCallTSC = tsc;
     lastCallLocation = location;
 }
 
-void ThreadManager::handleCallEnter(int functionId)
+void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
 {
     Call c;
     c.genId();
 
     if(callStack.empty()) {
         c.instruction = -1;
+
+        c.start = tsc;
     } else {
         Instruction i;
 
         i.segment = callStack.back().second;
         i.type = InstructionType::Call;
-        i.line = lastCallLocation->line;
-        i.column = lastCallLocation->column;
+        i.line = manager->locationDetails[lastCallLocation].line;
+        i.column = manager->locationDetails[lastCallLocation].column;
         manager->writer.insertInstruction(i);
 
         c.instruction = i.id;
+        c.start = lastCallTSC;
     }
 
     c.function = functionId;
-    c.start = lastCallTSC;
     c.thread = self.id;
 
     Segment s;
@@ -190,10 +190,6 @@ void ThreadManager::handleLocation(LocationDetails *location)
 {
     if (callStack.empty())
         return;
-
-    if (location->functionId != callStack.back().first.function) {
-        handleCallEnter(location->functionId);
-    }
 }
 
 void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
@@ -202,8 +198,8 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
 
     i.type = InstructionType::Access;
     i.segment = callStack.back().second;
-    i.line = details->details->line;
-    i.column = details->details->column;
+    i.line = manager->locationDetails[details->location].line;
+    i.column = manager->locationDetails[details->location].column;
 
     manager->writer.insertInstruction(i);
 }

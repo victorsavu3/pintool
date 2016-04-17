@@ -28,13 +28,13 @@ private:
     void handleTag(UINT64 tsc, int tagInstructionId);
     int lastTagHitId;
 
-    void handleCallEnter(int functionId);
-    void handleCall(UINT64 tsc, LocationDetails *location);
+    void handleCallEnter(UINT64 tsc,int functionId);
+    void handleCall(UINT64 tsc, int location);
     void handleRet(UINT64 tsc, int functionId);
     void handleLocation(LocationDetails* location);
     std::list<std::pair<Call, int> > callStack;
     UINT64 lastCallTSC;
-    LocationDetails* lastCallLocation;
+    int lastCallLocation;
 
     void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7]);
 

@@ -16,18 +16,17 @@ Manager::Manager(const string &db, const string &source, const string &filter) :
     loadTagIdTagMap();
 }
 
-LocationDetails *Manager::getLocation(ADDRINT address, int functionId)
+int Manager::getLocation(ADDRINT address, int functionId)
 {
     LocationDetails detail;
-    std::string tmp;
 
-    PIN_GetSourceLocation(address, (INT32*)&detail.column, (INT32*)&detail.line, &tmp);
+    PIN_GetSourceLocation(address, (INT32*)&detail.column, (INT32*)&detail.line, NULL);
 
     detail.functionId = functionId;
 
     locationDetails.push_back(detail);
 
-    return &locationDetails[locationDetails.size() - 1];
+    return locationDetails.size() - 1;
 }
 
 void Manager::bufferFull(BufferEntry* entries, UINT64 count, THREADID tid)
