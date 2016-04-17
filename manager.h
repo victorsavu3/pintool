@@ -8,12 +8,32 @@
 #include <pin.H>
 
 class Manager;
+struct MemoryOperationDetails;
+struct AccessInstructionDetails;
+struct LocationDetails;
 
 #include "sqlwriter.h"
 #include "entities.h"
 #include "filter.h"
 #include "buffer.h"
 #include "threadmanager.h"
+
+struct LocationDetails {
+    int functionId;
+    int line;
+    int column;
+};
+
+struct MemoryOperationDetails {
+    ADDRINT address;
+    UINT32 size;
+    BOOL isRead;
+};
+
+struct AccessInstructionDetails {
+    std::vector<MemoryOperationDetails> accesses;
+    LocationDetails* details;
+};
 
 class Manager
 {
@@ -25,17 +45,18 @@ public:
 
     std::map<SourceLocation, int> sourceLocationTagInstructionIdMap;
 
+    /* Buffer optimization */
+    std::vector<LocationDetails> locationDetails;
+    LocationDetails* getLocation(ADDRINT address, int functionId);
+
     /* Used in Trace */
     std::map<ADDRINT, TagBufferEntry> tagAddressesToInstrument;
-    std::map<ADDRINT, CallBufferEntry> callAddressesToInstrument;
+    std::map<ADDRINT, CallEnterBufferEntry> callAddressesToInstrument;
     std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
+    std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
 
-    struct AccessStaticData {
-        UINT32 size;
-        BOOL isRead;
-        UINT32 memOp;
-    };
-    std::multimap<ADDRINT, AccessStaticData> accessToInstrument;
+    std::map<ADDRINT, AccessInstructionBufferEntry> accessToInstrument;
+    std::vector<AccessInstructionDetails> accessDetails;
 
     std::vector<Tag> tags;
     std::map<int, Tag> tagIdTagMap;

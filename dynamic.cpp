@@ -9,6 +9,7 @@
 
 #include "manager.h"
 #include "buffer.h"
+#include "exception.h"
 
 KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
     "o", "data.db", "specify output file name");
@@ -66,7 +67,7 @@ VOID ImageLoad(IMG img, VOID *v)
                 INS ins = RTN_InsHeadOnly(rtn);
                 address = INS_Address(ins);
 
-                manager->callAddressesToInstrument.insert(std::make_pair(address, (CallBufferEntry){(UINT32)functionId}));
+                manager->callAddressesToInstrument.insert(std::make_pair(address, (CallEnterBufferEntry){(UINT32)functionId}));
 
                 bool needsSourceScan = false;
                 for (auto it : manager->sourceLocationTagInstructionIdMap) {
@@ -109,25 +110,29 @@ VOID ImageLoad(IMG img, VOID *v)
                     {
                         UINT32 memoryOperandCount = INS_MemoryOperandCount(ins);
 
+                        AccessInstructionDetails entry;
+                        entry.accesses.reserve(memoryOperandCount);
+                        entry.details = manager->getLocation(address, functionId);
+
                         for (UINT32 memOp = 0; memOp < memoryOperandCount; memOp++)
                         {
-                            Manager::AccessStaticData entry;
+                            MemoryOperationDetails opDetail;
 
-                            entry.size = INS_MemoryOperandSize(ins, memOp);
-                            entry.memOp = memOp;
+                            opDetail.size = INS_MemoryOperandSize(ins, memOp);
+                            opDetail.isRead = INS_MemoryOperandIsRead(ins, memOp);
 
-                            if (INS_MemoryOperandIsRead(ins, memOp)) {
-                                entry.isRead = true;
-
-                                manager->accessToInstrument.insert(std::make_pair(address, entry));
-                            }
-
-                            if (INS_MemoryOperandIsWritten(ins, memOp)) {
-                                entry.isRead = false;
-
-                                manager->accessToInstrument.insert(std::make_pair(address, entry));
-                            }
+                            entry.accesses.push_back(opDetail);
                         }
+
+                        manager->accessDetails.push_back(entry);
+                        AccessInstructionDetails* detailPtr = &(manager->accessDetails[manager->accessDetails.size() - 1]);
+                        manager->accessToInstrument.insert(std::make_pair(address, (AccessInstructionBufferEntry) {(ADDRINT)detailPtr}));
+                    }
+
+                    if (INS_IsCall(ins)) {
+                        ADDRINT detail = (ADDRINT)manager->getLocation(address, functionId);
+
+                        manager->callInstructionAddressesToInstrument.insert(std::make_pair(address, detail));
                     }
                 }
 
@@ -164,13 +169,24 @@ VOID Trace(TRACE trace, VOID *v)
             }
 
             {
+                auto it = manager->callInstructionAddressesToInstrument.find(address);
+
+                if (it != manager->callInstructionAddressesToInstrument.end()) {
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
+                         IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallInstructionBufferEntry, tsc),
+                         IARG_ADDRINT, it->second, offsetof(struct BufferEntry, data) + offsetof(struct CallInstructionBufferEntry, location),
+                         IARG_END);
+                }
+            }
+
+            {
                 auto it = manager->callAddressesToInstrument.find(address);
 
                 if (it != manager->callAddressesToInstrument.end()) {
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
-                         IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, tsc),
-                         IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallBufferEntry, functionId),
+                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::CallEnter), offsetof(struct BufferEntry, type),
+                         IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, functionId),
                          IARG_END);
                 }
             }
@@ -188,15 +204,34 @@ VOID Trace(TRACE trace, VOID *v)
             }
 
             {
-                auto range = manager->accessToInstrument.equal_range(address);
+                auto it = manager->accessToInstrument.find(address);
 
-                for(auto it = range.first; it != range.second; it++) {
-                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
-                         IARG_UINT32, it->second.size, offsetof(struct BufferEntry, data) + offsetof(struct MemRefBufferEntry, size),
-                         IARG_BOOL, it->second.isRead, offsetof(struct BufferEntry, data) + offsetof(struct MemRefBufferEntry, isRead),
-                         IARG_MEMORYOP_EA, it->second.memOp, offsetof(struct BufferEntry, data) + offsetof(struct MemRefBufferEntry, address),
-                         IARG_END);
+                if (it != manager->accessToInstrument.end()) {
+                    AccessInstructionDetails* detailPtr = (AccessInstructionDetails*)it->second.accessDetails;
+
+                    switch(detailPtr->accesses.size()) {
+                    case 1:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, it->second.accessDetails, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    case 2:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
+                             IARG_ADDRINT, it->second.accessDetails, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                             IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
+                             IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
+                             IARG_END);
+                        break;
+                    default:
+                        UnimplementedException("Too many memory operations per instruction");
+                        break;
+                    }
+
+
+
                 }
             }
         }

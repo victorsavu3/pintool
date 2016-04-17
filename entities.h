@@ -128,6 +128,8 @@ public:
 
     InstructionType type;
     int segment;
+    int line;
+    int column;
 };
 
 namespace std {

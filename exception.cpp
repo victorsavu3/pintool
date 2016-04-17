@@ -55,3 +55,12 @@ void Warn(string context, string err)
 {
     std::cerr << context << ": " << err << std::endl;
 }
+
+void UnimplementedException(std::string msg)
+{
+    std::cerr << "Unimplemented: " << msg << std::endl;
+
+    startDebugger();
+
+    PIN_WriteErrorMessage("Unimplemented", 1005, PIN_ERR_FATAL, 1, msg.c_str());
+}

@@ -6,6 +6,7 @@
 #include "entities.h"
 
 enum class BuferEntryType : UINT32 {
+    CallEnter,
     Call,
     Ret,
     Tag,
@@ -15,9 +16,13 @@ enum class BuferEntryType : UINT32 {
     Free
 };
 
-struct CallBufferEntry {
-    UINT32 functionId;
+struct CallInstructionBufferEntry {
+    ADDRINT location;
     UINT64 tsc;
+};
+
+struct CallEnterBufferEntry {
+    UINT32 functionId;
 };
 
 struct RetBufferEntry {
@@ -30,10 +35,9 @@ struct TagBufferEntry {
     UINT64 tsc;
 };
 
-struct MemRefBufferEntry {
-    ADDRINT address;
-    UINT32 size;
-    BOOL isRead;
+struct AccessInstructionBufferEntry {
+    ADDRINT accessDetails;
+    ADDRINT addresses[7];
 };
 
 struct AllocEnterBufferEntry {
@@ -50,10 +54,11 @@ struct FreeBufferEntry {
 
 union BufferEntryUnion {
     BuferEntryType type;
-    CallBufferEntry call;
+    CallInstructionBufferEntry callInstruction;
+    CallEnterBufferEntry callEnter;
     RetBufferEntry ret;
     TagBufferEntry tag;
-    MemRefBufferEntry memref;
+    AccessInstructionBufferEntry memref;
     AllocEnterBufferEntry allocenter;
     AllocExitBufferEntry allocexit;
     FreeBufferEntry free;

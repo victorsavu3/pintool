@@ -49,13 +49,18 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId);
         break;
     case BuferEntryType::Call:
-        handleCallEnter(entry->data.call.tsc - this->startTSC, entry->data.call.functionId);
+        handleLocation((LocationDetails*)entry->data.callInstruction.location);
+        handleCall(entry->data.callInstruction.tsc - this->startTSC, (LocationDetails*)entry->data.callInstruction.location);
+        break;
+    case BuferEntryType::CallEnter:
+        handleCallEnter(entry->data.callEnter.functionId);
         break;
     case BuferEntryType::Ret:
         handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
         break;
     case BuferEntryType::MemRef:
-        handleMemRef(entry->data.memref.address, entry->data.memref.size, entry->data.memref.isRead);
+        handleLocation(((AccessInstructionDetails*)entry->data.memref.accessDetails)->details);
+        handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
         break;
     default:
         CorruptedBufferException("Invalid entry type");
@@ -116,7 +121,12 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
     }
 }
 
-void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
+void ThreadManager::handleCall(UINT64 tsc, LocationDetails* location) {
+    lastCallTSC = tsc;
+    lastCallLocation = location;
+}
+
+void ThreadManager::handleCallEnter(int functionId)
 {
     Call c;
     c.genId();
@@ -128,13 +138,15 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
 
         i.segment = callStack.back().second;
         i.type = InstructionType::Call;
+        i.line = lastCallLocation->line;
+        i.column = lastCallLocation->column;
         manager->writer.insertInstruction(i);
 
         c.instruction = i.id;
     }
 
     c.function = functionId;
-    c.start = tsc;
+    c.start = lastCallTSC;
     c.thread = self.id;
 
     Segment s;
@@ -174,12 +186,25 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     manager->writer.insertCall(c);
 }
 
-void ThreadManager::handleMemRef(ADDRINT address, UINT32 size, BOOL isRead)
+void ThreadManager::handleLocation(LocationDetails *location)
+{
+    if (callStack.empty())
+        return;
+
+    if (location->functionId != callStack.back().first.function) {
+        handleCallEnter(location->functionId);
+    }
+}
+
+void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
 {
     Instruction i;
 
-    i.segment = callStack.back().second;
     i.type = InstructionType::Access;
+    i.segment = callStack.back().second;
+    i.line = details->details->line;
+    i.column = details->details->column;
+
     manager->writer.insertInstruction(i);
 }
 

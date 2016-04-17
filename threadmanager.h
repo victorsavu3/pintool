@@ -28,11 +28,15 @@ private:
     void handleTag(UINT64 tsc, int tagInstructionId);
     int lastTagHitId;
 
-    void handleCallEnter(UINT64 tsc, int functionId);
+    void handleCallEnter(int functionId);
+    void handleCall(UINT64 tsc, LocationDetails *location);
     void handleRet(UINT64 tsc, int functionId);
+    void handleLocation(LocationDetails* location);
     std::list<std::pair<Call, int> > callStack;
+    UINT64 lastCallTSC;
+    LocationDetails* lastCallLocation;
 
-    void handleMemRef(ADDRINT address, UINT32 size, BOOL isRead);
+    void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7]);
 
     std::list<TagInstance> currentTagInstances;
     std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);
