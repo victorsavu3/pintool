@@ -18,19 +18,22 @@ struct LocationDetails;
 #include "buffer.h"
 #include "threadmanager.h"
 
-struct LocationDetails {
+struct LocationDetails
+{
     int functionId;
     int line;
     int column;
 };
 
-struct MemoryOperationDetails {
+struct MemoryOperationDetails
+{
     ADDRINT address;
     UINT32 size;
     BOOL isRead;
 };
 
-struct AccessInstructionDetails {
+struct AccessInstructionDetails
+{
     std::vector<MemoryOperationDetails> accesses;
     int location;
 };

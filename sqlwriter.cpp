@@ -2,12 +2,14 @@
 
 #include "exception.h"
 
-SQLWriter::SQLWriter(const std::string& file, bool createDb) : db(std::make_shared<SQLite::Connection>(file.c_str(), createDb)) {
+SQLWriter::SQLWriter(const std::string& file, bool createDb) : db(std::make_shared<SQLite::Connection>(file.c_str(), createDb))
+{
     PIN_MutexInit(&mutex);
 
     runPragmas();
 
-    if (createDb) {
+    if (createDb)
+    {
         createDatabase();
     }
 
@@ -18,12 +20,14 @@ SQLWriter::SQLWriter(const std::string& file, bool createDb) : db(std::make_shar
     begin();
 }
 
-SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db, bool createDb) : db(db) {
+SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db, bool createDb) : db(db)
+{
     PIN_MutexInit(&mutex);
 
     runPragmas();
 
-    if (createDb) {
+    if (createDb)
+    {
         createDatabase();
     }
 
@@ -34,7 +38,8 @@ SQLWriter::SQLWriter(std::shared_ptr<SQLite::Connection> db, bool createDb) : db
     begin();
 }
 
-void SQLWriter::prepareStatements() {
+void SQLWriter::prepareStatements()
+{
     beginTransactionStmt = this->db->makeStatement("BEGIN EXCLUSIVE TRANSACTION");
     commitTransactionStmt = this->db->makeStatement("COMMIT TRANSACTION");
 
@@ -78,19 +83,22 @@ void SQLWriter::commit()
     commitTransactionStmt->execute();
 }
 
-void SQLWriter::createDatabase() {
+void SQLWriter::createDatabase()
+{
     this->db->execute(
 #include "create.sql.h"
     );
 }
 
-void SQLWriter::runPragmas() {
+void SQLWriter::runPragmas()
+{
     this->db->execute(
 #include "writePragmas.sql.h"
     );
 }
 
-void SQLWriter::clearDatabase() {
+void SQLWriter::clearDatabase()
+{
     this->db->execute(
 #include "clear.sql.h"
     );
@@ -236,13 +244,17 @@ int SQLWriter::getFunctionIdByProperties(const string &name, int image, const st
     int Id;
 
     getFunctionIdByPropertiesStmt << name << image << file << line;
-    if (getFunctionIdByPropertiesStmt->stepRow()) {
+    if (getFunctionIdByPropertiesStmt->stepRow())
+    {
         Id = getFunctionIdByPropertiesStmt->column<int>(0);
-    } else {
+    }
+    else
+    {
         SQLWriterException("Could not find row", "getFunctionIdByProperties");
     }
 
-    if (getFunctionIdByPropertiesStmt->stepRow()) {
+    if (getFunctionIdByPropertiesStmt->stepRow())
+    {
         SQLWriterException("Too many rows returned", "getFunctionIdByProperties");
     }
 
@@ -261,13 +273,17 @@ int SQLWriter::getSourceLocationId(const SourceLocation &location)
     int Id;
 
     getSourceLocationIdStmt << location.function << location.line << location.column;
-    if (getSourceLocationIdStmt->stepRow()) {
+    if (getSourceLocationIdStmt->stepRow())
+    {
         Id = getSourceLocationIdStmt->columnInt(0);
-    } else {
+    }
+    else
+    {
         SQLWriterException("Could not find row", "setSourceLocationId");
     }
 
-    if (getSourceLocationIdStmt->stepRow()) {
+    if (getSourceLocationIdStmt->stepRow())
+    {
         SQLWriterException("Too many rows returned", "setSourceLocationId");
     }
 
@@ -286,13 +302,17 @@ int SQLWriter::getImageIdByName(const string &name)
     int Id;
 
     getImageIdByNameStmt << name;
-    if (getImageIdByNameStmt->stepRow()) {
+    if (getImageIdByNameStmt->stepRow())
+    {
         Id = getImageIdByNameStmt->columnInt(0);
-    } else {
+    }
+    else
+    {
         SQLWriterException("Could not find row", "getImageIdByName");
     }
 
-    if (getImageIdByNameStmt->stepRow()) {
+    if (getImageIdByNameStmt->stepRow())
+    {
         SQLWriterException("Too many rows returned", "getImageIdByName");
     }
 
@@ -311,9 +331,12 @@ int SQLWriter::functionExists(const Function & fct)
     int Id;
 
     functionExistsStmt << fct.name << fct.prototype << fct.file << fct.line;
-    if (functionExistsStmt->stepRow()) {
+    if (functionExistsStmt->stepRow())
+    {
         Id = functionExistsStmt->columnInt(0);
-    } else {
+    }
+    else
+    {
         Id = -1;
     }
 
@@ -338,13 +361,17 @@ SourceLocation SQLWriter::getSourceLocationById(int id)
     lock();
 
     getSourceLocationByIdStmt << location.id;
-    if (getSourceLocationByIdStmt->stepRow()) {
+    if (getSourceLocationByIdStmt->stepRow())
+    {
         getSourceLocationByIdStmt >> location.function >> location.line >> location.column;
-    } else {
+    }
+    else
+    {
         SQLWriterException("Could not find row", "getSourceLocationById");
     }
 
-    if (getSourceLocationByIdStmt->stepRow()) {
+    if (getSourceLocationByIdStmt->stepRow())
+    {
         SQLWriterException("Too many rows returned", "getSourceLocationById");
     }
 

@@ -30,7 +30,8 @@ ThreadManager::~ThreadManager()
 void ThreadManager::bufferFull(BufferEntry * entries, UINT64 count)
 {
     lock();
-    for(UINT64 i = 0; i < count; i++) {
+    for(UINT64 i = 0; i < count; i++)
+    {
         handleEntry(&entries[i]);
     }
     unlock();
@@ -44,14 +45,16 @@ void ThreadManager::threadStopped()
 
     manager->writer.insertThread(self);
 
-    if (!callStack.empty()) {
+    if (!callStack.empty())
+    {
         CorruptedBufferException("Thread stopped before all calls returned");
     }
 }
 
 void ThreadManager::handleEntry(BufferEntry * entry)
 {
-    switch (entry->type) {
+    switch (entry->type)
+    {
     case BuferEntryType::Tag:
         handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId);
         break;
@@ -92,7 +95,8 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
 
     std::list<TagInstance>::iterator tagInstance = findCurrentTagInstance(tag.id);
 
-    switch (tag.type) {
+    switch (tag.type)
+    {
     case TagType::Simple:
         handleSimpleTag(tsc, tag, tagInstruction, tagInstance);
     case TagType::Pipeline:
@@ -120,7 +124,8 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
 
 }
 
-void ThreadManager::handleCall(UINT64 tsc, int location) {
+void ThreadManager::handleCall(UINT64 tsc, int location)
+{
     lastCallTSC = tsc;
     lastCallLocation = location;
 }
@@ -130,11 +135,14 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
     Call c;
     c.genId();
 
-    if(callStack.empty()) {
+    if(callStack.empty())
+    {
         c.instruction = -1;
 
         c.start = tsc;
-    } else {
+    }
+    else
+    {
         Instruction i;
 
         i.segment = callStack.back().second;
@@ -166,7 +174,8 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
 
     Call c = callStack.back().first;
 
-    while (c.function != functionId && !callStack.empty()) {
+    while (c.function != functionId && !callStack.empty())
+    {
         std::ostringstream oss;
 
         oss << "Unexpected return, expected " << functionId << " got " << c.function;
@@ -210,7 +219,8 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
 
 std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)
 {
-    for(auto tagInstance = currentTagInstances.begin(); tagInstance != currentTagInstances.end(); tagInstance++) {
+    for(auto tagInstance = currentTagInstances.begin(); tagInstance != currentTagInstances.end(); tagInstance++)
+    {
         if(tagInstance->tag == tagId)
             return tagInstance;
     }
@@ -220,10 +230,12 @@ std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId
 
 void ThreadManager::handleSimpleTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator& tagInstance)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
-        if (tagInstance != currentTagInstances.end()) {
+        if (tagInstance != currentTagInstances.end())
+        {
             CorruptedBufferException("Starting an already started tag");
         }
 
@@ -241,7 +253,8 @@ void ThreadManager::handleSimpleTag(UINT64 tsc, const Tag &tag, const TagInstruc
 
     case TagInstructionType::Stop:
     {
-        if (tagInstance == currentTagInstances.end()) {
+        if (tagInstance == currentTagInstances.end())
+        {
             CorruptedBufferException("Stopping an unstarted tag");
         }
 
@@ -260,10 +273,12 @@ void ThreadManager::handleSimpleTag(UINT64 tsc, const Tag &tag, const TagInstruc
 
 void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &tagInstance)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
-        if (tagInstance != currentTagInstances.end()) {
+        if (tagInstance != currentTagInstances.end())
+        {
             CorruptedBufferException("Starting an already started tag");
         }
 
@@ -283,7 +298,8 @@ void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstru
 
     case TagInstructionType::Stop:
     {
-        if (tagInstance == currentTagInstances.end()) {
+        if (tagInstance == currentTagInstances.end())
+        {
             CorruptedBufferException("Stopping an unstarted tag");
         }
 
@@ -306,10 +322,12 @@ void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstru
 
 void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &tagInstance)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
-        if (tagInstance != currentTagInstances.end()) {
+        if (tagInstance != currentTagInstances.end())
+        {
             CorruptedBufferException("Starting an already started tag");
         }
 
@@ -329,7 +347,8 @@ void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstr
 
     case TagInstructionType::Stop:
     {
-        if (tagInstance == currentTagInstances.end()) {
+        if (tagInstance == currentTagInstances.end())
+        {
             CorruptedBufferException("Stopping an unstarted tag");
         }
 
@@ -352,10 +371,12 @@ void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstr
 
 void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &tagInstance)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
-        if (tagInstance != currentTagInstances.end()) {
+        if (tagInstance != currentTagInstances.end())
+        {
             tagInstance->end = tsc;
 
             manager->writer.insertTagInstance(*tagInstance);
@@ -363,7 +384,8 @@ void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstructi
             currentTagInstances.erase(tagInstance);
         }
 
-        auto container = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance) {
+        auto container = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance)
+        {
             const Tag& tag = manager->tagIdTagMap[instance.tag];
 
             return tag.type == TagType::Pipeline || tag.type == TagType::Section;
@@ -395,11 +417,13 @@ void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstructi
 
 void ThreadManager::endCurrentTaskTag(UINT64 tsc)
 {
-    auto tagInstance = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance) {
+    auto tagInstance = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance)
+    {
         return manager->tagIdTagMap[instance.tag].type == TagType::Task;
     } );
 
-    if (tagInstance != currentTagInstances.end()) {
+    if (tagInstance != currentTagInstances.end())
+    {
         tagInstance->end = tsc;
 
         manager->writer.insertTagInstance(*tagInstance);
@@ -410,7 +434,8 @@ void ThreadManager::endCurrentTaskTag(UINT64 tsc)
 
 void ThreadManager::handleIgnoreAllTag(const TagInstruction &tagInstruction)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
         ignoreAccesses = true;
@@ -435,7 +460,8 @@ void ThreadManager::handleIgnoreAllTag(const TagInstruction &tagInstruction)
 
 void ThreadManager::handleProcessAllTag(const TagInstruction &tagInstruction)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
         processAccesses = true;
@@ -460,7 +486,8 @@ void ThreadManager::handleProcessAllTag(const TagInstruction &tagInstruction)
 
 void ThreadManager::handleProcessCallsTag(const TagInstruction &tagInstruction)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
         processCalls = true;
@@ -481,7 +508,8 @@ void ThreadManager::handleProcessCallsTag(const TagInstruction &tagInstruction)
 
 void ThreadManager::handleProcessAccessesTag(const TagInstruction &tagInstruction)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
         processAccesses = true;
@@ -502,7 +530,8 @@ void ThreadManager::handleProcessAccessesTag(const TagInstruction &tagInstructio
 
 void ThreadManager::handleIgnoreCallsTag(const TagInstruction &tagInstruction)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
         ignoreCalls = true;
@@ -524,7 +553,8 @@ void ThreadManager::handleIgnoreCallsTag(const TagInstruction &tagInstruction)
 
 void ThreadManager::handleIgnoreAccessesTag(const TagInstruction &tagInstruction)
 {
-    switch (tagInstruction.type) {
+    switch (tagInstruction.type)
+    {
     case TagInstructionType::Start:
     {
         ignoreAccesses = true;

@@ -35,7 +35,8 @@ VOID ImageLoad(IMG img, VOID *v)
     string image = IMG_Name(img);
     ADDRINT address;
 
-    if(!manager->filter.isImageFiltered(image)) {
+    if(!manager->filter.isImageFiltered(image))
+    {
         int imageId = manager->writer.getImageIdByName(image);
 
         for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec))
@@ -49,7 +50,8 @@ VOID ImageLoad(IMG img, VOID *v)
                 std::string name = PIN_UndecorateSymbolName(sym, UNDECORATION_NAME_ONLY);
                 std::string prototype = PIN_UndecorateSymbolName(sym, UNDECORATION_COMPLETE);
 
-                if(manager->filter.isFunctionFiltered(name) || manager->filter.isFunctionFiltered(prototype)) {
+                if(manager->filter.isFunctionFiltered(name) || manager->filter.isFunctionFiltered(prototype))
+                {
                     RTN_Close(rtn);
                     continue;
                 }
@@ -57,7 +59,8 @@ VOID ImageLoad(IMG img, VOID *v)
                 address = RTN_Address(rtn);
                 PIN_GetSourceLocation(address, &column, &line, &file);
 
-                if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown")) {
+                if(manager->filter.isFileFiltered(file) || (file=="") && manager->filter.isFileFiltered("Unknown"))
+                {
                     RTN_Close(rtn);
                     continue;
                 }
@@ -67,19 +70,23 @@ VOID ImageLoad(IMG img, VOID *v)
                 INS ins = RTN_InsHeadOnly(rtn);
                 address = INS_Address(ins);
 
-                manager->callAddressesToInstrument.insert(std::make_pair(address, (CallEnterBufferEntry) {
+                manager->callAddressesToInstrument.insert(std::make_pair(address, (CallEnterBufferEntry)
+                {
                     (UINT32)functionId
                 }));
 
                 bool needsSourceScan = false;
-                for (auto it : manager->sourceLocationTagInstructionIdMap) {
-                    if(it.first.function == functionId) {
+                for (auto it : manager->sourceLocationTagInstructionIdMap)
+                {
+                    if(it.first.function == functionId)
+                    {
                         needsSourceScan = true;
                         break;
                     }
                 }
 
-                if (needsSourceScan) {
+                if (needsSourceScan)
+                {
                     for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
                     {
                         address = INS_Address(ins);
@@ -91,10 +98,13 @@ VOID ImageLoad(IMG img, VOID *v)
                         location.line = line;
                         location.column = column;
 
-                        if(file.length() > 0) {
+                        if(file.length() > 0)
+                        {
                             auto it = manager->sourceLocationTagInstructionIdMap.find(location);
-                            if (it != manager->sourceLocationTagInstructionIdMap.end()) {
-                                manager->tagAddressesToInstrument.insert(std::make_pair(address, (TagBufferEntry) {
+                            if (it != manager->sourceLocationTagInstructionIdMap.end())
+                            {
+                                manager->tagAddressesToInstrument.insert(std::make_pair(address, (TagBufferEntry)
+                                {
                                     (UINT32)it->second
                                 }));
                             }
@@ -106,8 +116,10 @@ VOID ImageLoad(IMG img, VOID *v)
                 {
                     ADDRINT address = INS_Address(ins);
 
-                    if(INS_IsRet(ins)) {
-                        manager->retAddressesToInstrument.insert(std::make_pair(address, (RetBufferEntry) {
+                    if(INS_IsRet(ins))
+                    {
+                        manager->retAddressesToInstrument.insert(std::make_pair(address, (RetBufferEntry)
+                        {
                             (UINT32)functionId
                         }));
                     }
@@ -138,7 +150,8 @@ VOID ImageLoad(IMG img, VOID *v)
                         manager->accessToInstrument.insert(std::make_pair(address, manager->accessDetails.size() - 1));
                     }
 
-                    if (INS_IsCall(ins)) {
+                    if (INS_IsCall(ins))
+                    {
                         ADDRINT detail = (ADDRINT)manager->getLocation(address, functionId);
 
                         manager->callInstructionAddressesToInstrument.insert(std::make_pair(address, detail));
@@ -162,13 +175,15 @@ VOID Trace(TRACE trace, VOID *v)
 
     for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
     {
-        for(INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins=INS_Next(ins)) {
+        for(INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins=INS_Next(ins))
+        {
             ADDRINT address = INS_Address(ins);
 
             {
                 auto it = manager->tagAddressesToInstrument.find(address);
 
-                if (it != manager->tagAddressesToInstrument.end()) {
+                if (it != manager->tagAddressesToInstrument.end())
+                {
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
                                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tsc),
@@ -180,7 +195,8 @@ VOID Trace(TRACE trace, VOID *v)
             {
                 auto it = manager->callInstructionAddressesToInstrument.find(address);
 
-                if (it != manager->callInstructionAddressesToInstrument.end()) {
+                if (it != manager->callInstructionAddressesToInstrument.end())
+                {
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Call), offsetof(struct BufferEntry, type),
                                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallInstructionBufferEntry, tsc),
@@ -192,7 +208,8 @@ VOID Trace(TRACE trace, VOID *v)
             {
                 auto it = manager->callAddressesToInstrument.find(address);
 
-                if (it != manager->callAddressesToInstrument.end()) {
+                if (it != manager->callAddressesToInstrument.end())
+                {
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::CallEnter), offsetof(struct BufferEntry, type),
                                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, functionId),
@@ -204,7 +221,8 @@ VOID Trace(TRACE trace, VOID *v)
             {
                 auto it = manager->retAddressesToInstrument.find(address);
 
-                if (it != manager->retAddressesToInstrument.end()) {
+                if (it != manager->retAddressesToInstrument.end())
+                {
                     INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Ret), offsetof(struct BufferEntry, type),
                                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct RetBufferEntry, tsc),
@@ -216,11 +234,13 @@ VOID Trace(TRACE trace, VOID *v)
             {
                 auto it = manager->accessToInstrument.find(address);
 
-                if (it != manager->accessToInstrument.end()) {
+                if (it != manager->accessToInstrument.end())
+                {
                     AccessInstructionDetails& detail = manager->accessDetails[it->second];
                     AccessInstructionDetails* detailPtr = &detail;
 
-                    switch(detail.accesses.size()) {
+                    switch(detail.accesses.size())
+                    {
                     case 1:
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
@@ -329,7 +349,8 @@ VOID * BufferFull(BUFFER_ID, THREADID tid, const CONTEXT *, void *buffer,
     return buffer;
 }
 
-void bindThreadToCore() {
+void bindThreadToCore()
+{
     cpu_set_t my_set;
     CPU_ZERO(&my_set);
     CPU_SET(sched_getcpu(), &my_set);

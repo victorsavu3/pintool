@@ -7,11 +7,13 @@
 #include "sqlite.h"
 #include "asm.h"
 
-void startDebugger() {
+void startDebugger()
+{
     debugger_trap();
 }
 
-void YAMLException(std::string file, std::string err) {
+void YAMLException(std::string file, std::string err)
+{
     std::cerr << "Error loading YAML file '" << file << "': " << err.c_str() << std::endl;
 
     startDebugger();

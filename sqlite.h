@@ -9,7 +9,8 @@
 struct sqlite3;
 struct sqlite3_stmt;
 
-namespace SQLite {
+namespace SQLite
+{
 
 class Connection;
 class Statement;
@@ -47,7 +48,8 @@ public:
     Statement(std::shared_ptr<Connection> connection, const char* sql);
     ~Statement();
 
-    void bind(int col, uint64_t val) {
+    void bind(int col, uint64_t val)
+    {
         this->bind(col, (int64_t) val);
     }
     void bind(int, int64_t);
@@ -83,10 +85,12 @@ private:
     int lastBound;
 };
 
-template <> inline int Statement::column<int>(int col) {
+template <> inline int Statement::column<int>(int col)
+{
     return columnInt(col);
 }
-template <> inline std::string Statement::column<std::string>(int col) {
+template <> inline std::string Statement::column<std::string>(int col)
+{
     return columnString(col);
 }
 
@@ -96,7 +100,8 @@ public:
     StatementBinder(std::shared_ptr<Statement> stmt) : stmt(stmt), at(1) {}
 
     template <typename T>
-    StatementBinder& operator<<(const T& obj) {
+    StatementBinder& operator<<(const T& obj)
+    {
         stmt->bind(at++, obj);
 
         return *this;
@@ -106,14 +111,16 @@ private:
     std::shared_ptr<Statement> stmt;
 };
 
-template <> inline StatementBinder& StatementBinder::operator<< <NullClass>(const NullClass& obj) {
+template <> inline StatementBinder& StatementBinder::operator<< <NullClass>(const NullClass& obj)
+{
     stmt->bindNULL(at++);
 
     return *this;
 }
 
 template <typename T>
-StatementBinder operator<<(Statement& stmt, const T& obj) {
+StatementBinder operator<<(Statement& stmt, const T& obj)
+{
     StatementBinder binder(stmt.shared_from_this());
 
     binder << obj;
@@ -122,7 +129,8 @@ StatementBinder operator<<(Statement& stmt, const T& obj) {
 }
 
 template <typename T>
-StatementBinder operator<<(std::shared_ptr<Statement>& stmt, const T& obj) {
+StatementBinder operator<<(std::shared_ptr<Statement>& stmt, const T& obj)
+{
     StatementBinder binder(stmt);
 
     binder << obj;
@@ -136,7 +144,8 @@ public:
     StatementReader(std::shared_ptr<Statement> stmt) : stmt(stmt), at(0) {}
 
     template <typename T>
-    StatementReader& operator>>(T& obj) {
+    StatementReader& operator>>(T& obj)
+    {
         obj = stmt->column<T>(at++);
 
         return *this;
@@ -147,7 +156,8 @@ private:
 };
 
 template <typename T>
-StatementReader operator>>(Statement& stmt, T& obj) {
+StatementReader operator>>(Statement& stmt, T& obj)
+{
     StatementReader reader(stmt.shared_from_this());
 
     reader >> obj;
@@ -156,7 +166,8 @@ StatementReader operator>>(Statement& stmt, T& obj) {
 }
 
 template <typename T>
-StatementReader operator>>(std::shared_ptr<Statement>& stmt, T& obj) {
+StatementReader operator>>(std::shared_ptr<Statement>& stmt, T& obj)
+{
     StatementReader reader(stmt);
 
     reader >> obj;

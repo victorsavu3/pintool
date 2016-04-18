@@ -72,7 +72,8 @@ void Manager::loadTags(const string &file)
     if(!tags.IsSequence())
         YAMLException(file, "Source file should contain a sequence called 'tags'");
 
-    for (std::size_t i=0; i < tags.size(); i++) {
+    for (std::size_t i=0; i < tags.size(); i++)
+    {
         YAML::Node tag = tags[i];
         Tag t;
 
@@ -92,11 +93,16 @@ void Manager::loadTags(const string &file)
 
         std::string typeName = tag["type"].as<std::string>();
 
-        if (typeName == "Simple") {
+        if (typeName == "Simple")
+        {
             t.type = TagType::Simple;
-        } else if (typeName == "Counter") {
+        }
+        else if (typeName == "Counter")
+        {
             t.type = TagType::Counter;
-        } else {
+        }
+        else
+        {
             YAMLException(file, "_ tag type");
         }
 
@@ -108,7 +114,8 @@ void Manager::loadTags(const string &file)
     if(!tagInstructions.IsSequence())
         YAMLException(file, "Source file should contain a sequence called 'tagInstructions'");
 
-    for (std::size_t i=0; i < tagInstructions.size(); i++) {
+    for (std::size_t i=0; i < tagInstructions.size(); i++)
+    {
         YAML::Node tagInstruction = tagInstructions[i];
         TagInstruction t;
 
@@ -117,11 +124,16 @@ void Manager::loadTags(const string &file)
 
         std::string typeName = tagInstruction["type"].as<std::string>();
 
-        if (typeName == "Start") {
+        if (typeName == "Start")
+        {
             t.type = TagInstructionType::Start;
-        } else if (typeName == "Stop") {
+        }
+        else if (typeName == "Stop")
+        {
             t.type = TagInstructionType::Stop;
-        } else {
+        }
+        else
+        {
             YAMLException(file, "invalid tag instruction type");
         }
 
@@ -140,7 +152,8 @@ void Manager::loadTags(const string &file)
 
     YAML::Node flags = filter["flags"];
 
-    if (flags) {
+    if (flags)
+    {
         if(!flags.IsMap())
             YAMLException(file, "flags should be a map");
 
@@ -163,18 +176,21 @@ void Manager::loadTags(const string &file)
 
 void Manager::writeTags()
 {
-    for (auto& it : tags) {
+    for (auto& it : tags)
+    {
         writer.insertTag(it);
     }
 
-    for (auto& tagInstruction : tagInstructions) {
+    for (auto& tagInstruction : tagInstructions)
+    {
         writer.insertTagInstruction(tagInstruction);
     }
 }
 
 void Manager::loadSourceLocationTagIdMap()
 {
-    for (auto it : tagInstructions) {
+    for (auto it : tagInstructions)
+    {
         sourceLocationTagInstructionIdMap.insert(std::make_pair(writer.getSourceLocationById(it.location), it.id));
     }
 }
@@ -187,7 +203,8 @@ void Manager::loadTagIdTagMap()
 
 void Manager::loadTagInstructionIdMap()
 {
-    for (auto tagInstruction : tagInstructions) {
+    for (auto tagInstruction : tagInstructions)
+    {
         tagInstructionIdMap.insert(std::make_pair(tagInstruction.id, tagInstruction));
     }
 }

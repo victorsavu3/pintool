@@ -6,7 +6,8 @@
 #include <map>
 #include <string>
 
-struct FilterData {
+struct FilterData
+{
     std::vector<std::regex> include;
     std::vector<std::regex> exclude;
 };

@@ -8,7 +8,8 @@ void CorruptedBufferException(std::string err);
 void Warn(std::string context, std::string err);
 void UnimplementedException(std::string msg);
 
-namespace SQLite {
+namespace SQLite
+{
 class Connection;
 }
 

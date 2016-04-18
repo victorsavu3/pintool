@@ -7,13 +7,17 @@
 
 #include "exception.h"
 
-namespace SQLite {
+namespace SQLite
+{
 
 NullClass SQLNULL;
 
-Connection::Connection(const char * location, bool forceCreate) {
-    if (forceCreate) {
-        if( access( location, F_OK ) != -1 ) {
+Connection::Connection(const char * location, bool forceCreate)
+{
+    if (forceCreate)
+    {
+        if( access( location, F_OK ) != -1 )
+        {
             SQLiteException("Database already exists", 0, "Connection constructor");
         }
     }
@@ -25,7 +29,8 @@ Connection::Connection(const char * location, bool forceCreate) {
     PIN_MutexInit(&mutex);
 }
 
-Connection::~Connection() {
+Connection::~Connection()
+{
     int code;
     if (code = sqlite3_close(this->db) != SQLITE_OK)
         SQLiteException(this, code, "Connection destructor");
@@ -33,11 +38,13 @@ Connection::~Connection() {
     PIN_MutexFini(&mutex);
 }
 
-const char* Connection::getErrorMessage() {
+const char* Connection::getErrorMessage()
+{
     return sqlite3_errmsg(this->db);
 }
 
-std::shared_ptr<Statement> Connection::makeStatement(const char* sql) {
+std::shared_ptr<Statement> Connection::makeStatement(const char* sql)
+{
     return std::make_shared<Statement>(this->shared_from_this(), sql);
 }
 
@@ -51,7 +58,8 @@ void Connection::execute(const char *sql)
     lock();
 
     char* err;
-    if (int code = sqlite3_exec(this->db, sql, NULL, NULL, &err) != SQLITE_OK) {
+    if (int code = sqlite3_exec(this->db, sql, NULL, NULL, &err) != SQLITE_OK)
+    {
         SQLiteException(err, code, "execute");
     }
 
@@ -68,11 +76,13 @@ void Connection::unlock()
     PIN_MutexUnlock(&mutex);
 }
 
-Statement::Statement(std::shared_ptr<Connection> connection, const char* sql) : connection(connection) {
+Statement::Statement(std::shared_ptr<Connection> connection, const char* sql) : connection(connection)
+{
     connection->lock();
 
     int code;
-    if  (code = sqlite3_prepare_v2(connection->db, sql, -1, &this->stmt, NULL) != SQLITE_OK) {
+    if  (code = sqlite3_prepare_v2(connection->db, sql, -1, &this->stmt, NULL) != SQLITE_OK)
+    {
         SQLiteException(this->connection.get(), code, "Statemenet constructor");
     }
 
@@ -82,7 +92,8 @@ Statement::Statement(std::shared_ptr<Connection> connection, const char* sql) : 
     connection->unlock();
 }
 
-Statement::~Statement() {
+Statement::~Statement()
+{
     connection->lock();
 
     if (int code = sqlite3_finalize(this->stmt) != SQLITE_OK)
@@ -91,7 +102,8 @@ Statement::~Statement() {
     connection->unlock();
 }
 
-void Statement::bind(int pos, int64_t val) {
+void Statement::bind(int pos, int64_t val)
+{
     connection->lock();
 
     if (int code = sqlite3_bind_int64(this->stmt, pos, (sqlite3_int64)val) != SQLITE_OK)
@@ -100,7 +112,8 @@ void Statement::bind(int pos, int64_t val) {
     connection->unlock();
 }
 
-void Statement::bind(int pos, int val ) {
+void Statement::bind(int pos, int val )
+{
     connection->lock();
 
     if (int code = sqlite3_bind_int(this->stmt, pos, val) != SQLITE_OK)
@@ -109,7 +122,8 @@ void Statement::bind(int pos, int val ) {
     connection->unlock();
 }
 
-void Statement::bind(int pos, const std::string& val) {
+void Statement::bind(int pos, const std::string& val)
+{
     connection->lock();
 
     if (int code = sqlite3_bind_text(this->stmt, pos, val.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK)
@@ -118,7 +132,8 @@ void Statement::bind(int pos, const std::string& val) {
     connection->unlock();
 }
 
-void Statement::bind(int pos, const char* val) {
+void Statement::bind(int pos, const char* val)
+{
     connection->lock();
 
     if (int code = sqlite3_bind_text(this->stmt, pos, val, -1, SQLITE_TRANSIENT) != SQLITE_OK)
@@ -156,7 +171,8 @@ void Statement::checkColumn(int col)
     if(columnCount <= col)
         SQLiteException("Request for column outside row", 0, "bind char*");
 
-    if (col > lastBound) {
+    if (col > lastBound)
+    {
         lastBound = col;
     }
 }
@@ -174,7 +190,8 @@ int Statement::columnInt(int col)
     return val;
 }
 
-void Statement::execute() {
+void Statement::execute()
+{
     connection->lock();
 
     this->stepUnlocked();
@@ -240,17 +257,20 @@ bool Statement::stepRow()
     return isRow;
 }
 
-void Statement::resetUnlocked() {
+void Statement::resetUnlocked()
+{
     if (int code = sqlite3_reset(this->stmt) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "reset");
 }
 
-void Statement::clearBindingsUnlocked() {
+void Statement::clearBindingsUnlocked()
+{
     if (int code = sqlite3_clear_bindings(this->stmt) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "clearBindings");
 }
 
-void Statement::stepUnlocked() {
+void Statement::stepUnlocked()
+{
     if(lastBound != columnCount - 1)
         SQLiteException("Not all parameters bound", 0, "stepUnlocked");
 

@@ -14,7 +14,8 @@ Filter::Filter(std::string file)
     if(!filter.IsMap())
         YAMLException(file, "Filter file should be a map");
 
-    for (auto it : filter) {
+    for (auto it : filter)
+    {
         if(!it.second.IsMap())
             YAMLException(file, "Filter file should be a map of maps");
 
@@ -24,25 +25,31 @@ Filter::Filter(std::string file)
 
 
 
-        if (it.second["include"]) {
+        if (it.second["include"])
+        {
             if(!it.second["include"].IsSequence())
                 YAMLException(file, "'include' should be a sequence");
 
-            for (auto it2 : it.second["include"]) {
+            for (auto it2 : it.second["include"])
+            {
                 std::cout << it2.as<std::string>() << std::endl;
                 filterdata.include.push_back(std::regex(it2.as<std::string>(), std::regex_constants::basic));
             }
-        } else {
+        }
+        else
+        {
 
         }
 
 
-        if (it.second["exclude"]) {
+        if (it.second["exclude"])
+        {
             if(!it.second["exclude"].IsSequence())
                 YAMLException(file, "'exclude' should be a sequence");
 
 
-            for (auto it2 : it.second["exclude"]) {
+            for (auto it2 : it.second["exclude"])
+            {
                 filterdata.exclude.push_back(std::regex(it2.as<std::string>()));
             }
 
@@ -73,8 +80,10 @@ bool Filter::isFiltered(const std::string& type, const std::string& content)
 
     bool included = false;
 
-    for (auto it : filterdata.include) {
-        if (std::regex_search(content, it)) {
+    for (auto it : filterdata.include)
+    {
+        if (std::regex_search(content, it))
+        {
             included = true;
             break;
         }
@@ -83,8 +92,10 @@ bool Filter::isFiltered(const std::string& type, const std::string& content)
     if (!included && filterdata.include.size() > 0)
         return true;
 
-    for (auto it : filterdata.exclude) {
-        if (std::regex_search(content, it)) {
+    for (auto it : filterdata.exclude)
+    {
+        if (std::regex_search(content, it))
+        {
             return true;
         }
     }

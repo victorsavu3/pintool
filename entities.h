@@ -9,19 +9,22 @@
 
 #include <pin.H>
 
-class EntityWithGeneratedId {
+class EntityWithGeneratedId
+{
 public:
     int id;
     void genId();
 };
 
-class Image {
+class Image
+{
 public:
     int id;
     std::string name;
 };
 
-class File {
+class File
+{
 public:
     int id;
     std::string name;
@@ -29,7 +32,8 @@ public:
     int image;
 };
 
-class Function {
+class Function
+{
 public:
     int id;
     std::string name;
@@ -39,7 +43,8 @@ public:
     int line;
 };
 
-class SourceLocation {
+class SourceLocation
+{
 public:
     int id;
 
@@ -48,7 +53,8 @@ public:
     int column;
 };
 
-enum class TagType {
+enum class TagType
+{
     Simple = 0,
     Counter = 1,
     Section = 2,
@@ -62,7 +68,8 @@ enum class TagType {
     Task = 10
 };
 
-class Tag {
+class Tag
+{
 public:
     int id;
 
@@ -70,12 +77,14 @@ public:
     TagType type;
 };
 
-enum class TagInstructionType {
+enum class TagInstructionType
+{
     Start = 0,
     Stop = 1
 };
 
-class TagInstruction {
+class TagInstruction
+{
 public:
     int id;
 
@@ -84,7 +93,8 @@ public:
     TagInstructionType type;
 };
 
-class TagInstance : public EntityWithGeneratedId {
+class TagInstance : public EntityWithGeneratedId
+{
 public:
     int thread;
     int tag;
@@ -95,7 +105,8 @@ public:
     int counter;
 };
 
-class Thread : public EntityWithGeneratedId {
+class Thread : public EntityWithGeneratedId
+{
 public:
     int instruction;
     struct timespec startTime;
@@ -104,7 +115,8 @@ public:
     UINT64 endTSC;
 };
 
-class Call : public EntityWithGeneratedId {
+class Call : public EntityWithGeneratedId
+{
 public:
     int thread;
     int instruction;
@@ -112,26 +124,30 @@ public:
     UINT64 start, end;
 };
 
-enum class SegmentType {
+enum class SegmentType
+{
     Standard = 0,
     Loop = 1
 };
 
-class Segment {
+class Segment
+{
 public:
     int id;
     int call;
     SegmentType type;
 };
 
-enum class InstructionType {
+enum class InstructionType
+{
     Call    = 0,
     Access  = 1,
     Alloc   = 2,
     Free    = 3
 };
 
-class Instruction {
+class Instruction
+{
 public:
     int id;
 
@@ -141,7 +157,8 @@ public:
     int column;
 };
 
-namespace std {
+namespace std
+{
 template <>
 struct hash<SourceLocation>
 {
@@ -153,15 +170,18 @@ struct hash<SourceLocation>
 }
 
 
-inline bool operator==(const SourceLocation & lhs, const SourceLocation & rhs ) {
+inline bool operator==(const SourceLocation & lhs, const SourceLocation & rhs )
+{
     return std::tie(lhs.function, lhs.line, lhs.column) == std::tie(rhs.function, rhs.line, rhs.column);
 }
 
-inline bool operator!=(const SourceLocation & lhs, const SourceLocation & rhs ) {
+inline bool operator!=(const SourceLocation & lhs, const SourceLocation & rhs )
+{
     return !(lhs == rhs);
 }
 
-inline bool operator<(const SourceLocation & lhs, const SourceLocation & rhs ) {
+inline bool operator<(const SourceLocation & lhs, const SourceLocation & rhs )
+{
     return std::tie(lhs.function, lhs.line, lhs.column) < std::tie(rhs.function, rhs.line, rhs.column);
 }
 

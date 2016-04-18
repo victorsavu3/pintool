@@ -17,7 +17,8 @@ KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
 KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
                             "f", "filter.yaml", "specify filter name");
 
-struct Manager {
+struct Manager
+{
     std::unique_ptr<SQLWriter> writer;
     std::unique_ptr<Filter> filter;
 };
@@ -38,7 +39,8 @@ VOID ImageLoad(IMG img, VOID *v)
 
     fprintf(stderr, "Processing %s\n", image.name.c_str());
 
-    if(manager->filter->isImageFiltered(image.name)) {
+    if(manager->filter->isImageFiltered(image.name))
+    {
         cerr << "Skipping image:" << image.name << endl;
         return;
     }
@@ -63,7 +65,8 @@ VOID ImageLoad(IMG img, VOID *v)
             function.name = PIN_UndecorateSymbolName(sym, UNDECORATION_NAME_ONLY);
             function.prototype = PIN_UndecorateSymbolName(sym, UNDECORATION_COMPLETE);
 
-            if(manager->filter->isFunctionFiltered(function.name) || manager->filter->isFunctionFiltered(function.prototype)) {
+            if(manager->filter->isFunctionFiltered(function.name) || manager->filter->isFunctionFiltered(function.prototype))
+            {
                 cerr << "Skipping function:" << function.prototype << endl;
                 RTN_Close(rtn);
                 continue;
@@ -74,12 +77,15 @@ VOID ImageLoad(IMG img, VOID *v)
 
             function.line = line;
 
-            if (files.find(file) == files.end()) {
-                if (file.length() == 0) {
+            if (files.find(file) == files.end())
+            {
+                if (file.length() == 0)
+                {
                     file = "Unknown";
                 }
 
-                if(manager->filter->isFileFiltered(file)) {
+                if(manager->filter->isFileFiltered(file))
+                {
                     cerr << "Skipping file:" << file << endl;
                     RTN_Close(rtn);
                     continue;
@@ -104,17 +110,20 @@ VOID ImageLoad(IMG img, VOID *v)
 
                 PIN_GetSourceLocation(address, &column, &line, NULL);
 
-                if(file.length() > 0) {
+                if(file.length() > 0)
+                {
                     SourceLocation location;
 
                     location.function = function.id;
                     location.line = line;
                     location.column = column;
 
-                    if (location != lastLocation) {
+                    if (location != lastLocation)
+                    {
                         lastLocation = location;
 
-                        if (foundLocations.find(location) == foundLocations.end()) {
+                        if (foundLocations.find(location) == foundLocations.end())
+                        {
                             writer->insertSourceLocation(location);
 
                             foundLocations.insert(location);
