@@ -45,9 +45,19 @@ void ThreadManager::threadStopped()
 
     manager->writer.insertThread(self);
 
-    if (!callStack.empty())
+    while (!callStack.empty())
     {
-        CorruptedBufferException("Thread stopped before all calls returned");
+        std::ostringstream oss;
+
+        oss << "Closing " << callStack.back().first.function << " a end of thread";
+        Warn("threadStopped", oss.str());
+
+        Call c = callStack.back().first;
+        callStack.pop_back();
+
+        c.end = self.endTSC;
+
+        manager->writer.insertCall(c);
     }
 }
 
@@ -60,6 +70,8 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         break;
     case BuferEntryType::Call:
         if (processCallsComputed)
+            handleLocation(manager->locationDetails[entry->data.callInstruction.location]);
+        if (processCallsComputed)
             handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location);
         break;
     case BuferEntryType::CallEnter:
@@ -71,6 +83,8 @@ void ThreadManager::handleEntry(BufferEntry * entry)
             handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
         break;
     case BuferEntryType::MemRef:
+        if (processCallsComputed)
+            handleLocation(manager->locationDetails[((AccessInstructionDetails*)entry->data.memref.accessDetails)->location]);
         if (processAccessesComputed)
             handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
         break;
@@ -99,24 +113,34 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
     {
     case TagType::Simple:
         handleSimpleTag(tsc, tag, tagInstruction, tagInstance);
+        break;
     case TagType::Pipeline:
         handlePipelineTag(tsc, tag, tagInstruction, tagInstance);
+        break;
     case TagType::Section:
         handleSectionTag(tsc, tag, tagInstruction, tagInstance);
+        break;
     case TagType::Task:
         handleTaskTag(tsc, tag, tagInstruction, tagInstance);
+        break;
     case TagType::IgnoreAll:
         handleIgnoreAllTag(tagInstruction);
+        break;
     case TagType::ProcessAll:
         handleProcessAllTag(tagInstruction);
+        break;
     case TagType::ProcessCalls:
         handleProcessCallsTag(tagInstruction);
+        break;
     case TagType::ProcessAccesses:
         handleProcessAccessesTag(tagInstruction);
+        break;
     case TagType::IgnoreCalls:
         handleIgnoreCallsTag(tagInstruction);
+        break;
     case TagType::IgnoreAccesses:
         handleIgnoreAccessesTag(tagInstruction);
+        break;
     default:
         CorruptedBufferException("Invalid tag type");
     }
@@ -197,7 +221,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     manager->writer.insertCall(c);
 }
 
-void ThreadManager::handleLocation(LocationDetails *location)
+void ThreadManager::handleLocation(const LocationDetails& location)
 {
     if (callStack.empty())
         return;

@@ -54,9 +54,9 @@ CREATE TABLE Instruction(
 
 CREATE TABLE InstructionTagInstance(
   Id INTEGER PRIMARY KEY NOT NULL,
-  Instructon INTEGER,
-  Tag INTEGER
-  FOREIGN KEY(Instructon) REFERENCES Instructon(Id),
+  Instruction INTEGER,
+  Tag INTEGER,
+  FOREIGN KEY(Instruction) REFERENCES Instruction(Id),
   FOREIGN KEY(Tag) REFERENCES Tag(Id)
 );
 

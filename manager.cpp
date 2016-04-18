@@ -101,9 +101,49 @@ void Manager::loadTags(const string &file)
         {
             t.type = TagType::Counter;
         }
+        else if (typeName == "IgnoreAccesses")
+        {
+            t.type = TagType::IgnoreAccesses;
+        }
+        else if (typeName == "IgnoreAll")
+        {
+            t.type = TagType::IgnoreAll;
+        }
+        else if (typeName == "IgnoreCalls")
+        {
+            t.type = TagType::IgnoreCalls;
+        }
+        else if (typeName == "Pipeline")
+        {
+            t.type = TagType::Pipeline;
+        }
+        else if (typeName == "ProcessAccesses")
+        {
+            t.type = TagType::ProcessAccesses;
+        }
+        else if (typeName == "ProcessAll")
+        {
+            t.type = TagType::ProcessAll;
+        }
+        else if (typeName == "ProcessCalls")
+        {
+            t.type = TagType::ProcessCalls;
+        }
+        else if (typeName == "Section")
+        {
+            t.type = TagType::Section;
+        }
+        else if (typeName == "Simple")
+        {
+            t.type = TagType::Simple;
+        }
+        else if (typeName == "Task")
+        {
+            t.type = TagType::Task;
+        }
         else
         {
-            YAMLException(file, "_ tag type");
+            YAMLException(file, "invalid tag type");
         }
 
         this->tags.push_back(t);
