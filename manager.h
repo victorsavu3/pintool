@@ -64,6 +64,9 @@ public:
     std::vector<TagInstruction> tagInstructions;
     std::map<int, TagInstruction> tagInstructionIdMap;
 
+    bool processCallsByDefault;
+    bool processAccessesByDefault;
+
     void bufferFull(struct BufferEntry*, UINT64, THREADID);
 
     void setUpThreadManager(THREADID);

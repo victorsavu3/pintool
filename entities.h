@@ -50,7 +50,16 @@ class SourceLocation {
 
 enum class TagType {
     Simple = 0,
-    Counter = 1
+    Counter = 1,
+    Section = 2,
+    Pipeline = 3,
+    IgnoreAll = 4,
+    IgnoreCalls = 5,
+    IgnoreAccesses = 6,
+    ProcessAll = 7,
+    ProcessCalls = 8,
+    ProcessAccesses = 9,
+    Task = 10
 };
 
 class Tag {

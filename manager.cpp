@@ -8,6 +8,9 @@ Manager::Manager(const string &db, const string &source, const string &filter) :
 {
     PIN_MutexInit(&mutex);
 
+    processAccessesByDefault = false;
+    processCallsByDefault = true;
+
     loadTags(source);
     writeTags();
 
@@ -135,6 +138,27 @@ void Manager::loadTags(const string &file)
         this->tagInstructions.push_back(t);
     }
 
+    YAML::Node flags = filter["flags"];
+
+    if (flags) {
+        if(!flags.IsMap())
+            YAMLException(file, "flags should be a map");
+
+        auto processAccessesByDefaultFlag = flags["processAccessesByDefault"];
+
+        if(!processAccessesByDefaultFlag.IsScalar())
+            YAMLException(file, "individual flags should be a boolean");
+
+        processAccessesByDefault = processAccessesByDefaultFlag.as<bool>();
+
+
+        auto processCallsByDefaultFlag = flags["processCallsByDefault"];
+
+        if(!processCallsByDefaultFlag.IsScalar())
+            YAMLException(file, "individual flags should be a boolean");
+
+        processCallsByDefault = processCallsByDefaultFlag.as<bool>();
+    }
 }
 
 void Manager::writeTags()

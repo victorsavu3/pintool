@@ -13,6 +13,13 @@ ThreadManager::ThreadManager(Manager *manager, THREADID tid) : manager(manager),
     clock_gettime(CLOCK_REALTIME, &self.startTime);
 
     self.genId();
+
+    processAccesses = false;
+    processCalls = false;
+    ignoreAccesses = false;
+    ignoreCalls = false;
+
+    updateChecks();
 }
 
 ThreadManager::~ThreadManager()
@@ -49,16 +56,20 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId);
         break;
     case BuferEntryType::Call:
-        handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location);
+        if (processCallsComputed)
+            handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location);
         break;
     case BuferEntryType::CallEnter:
-        handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId);
+        if (processCallsComputed)
+            handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId);
         break;
     case BuferEntryType::Ret:
-        handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
+        if (processCallsComputed)
+            handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
         break;
     case BuferEntryType::MemRef:
-        handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
+        if (processAccessesComputed)
+            handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
         break;
     default:
         CorruptedBufferException("Invalid entry type");
@@ -81,42 +92,32 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
 
     std::list<TagInstance>::iterator tagInstance = findCurrentTagInstance(tag.id);
 
-    switch (tagInstruction.type) {
-    case TagInstructionType::Start:
-    {
-        if (tagInstance != currentTagInstances.end()) {
-            CorruptedBufferException("Starting an already started tag");
-        }
-
-        TagInstance ti;
-        ti.genId();
-
-        ti.start = tsc;
-        ti.tag = tag.id;
-        ti.thread = self.id;
-
-        currentTagInstances.push_front(ti);
-
-        break;
-    }
-
-    case TagInstructionType::Stop:
-    {
-        if (tagInstance == currentTagInstances.end()) {
-            CorruptedBufferException("Stopping an unstarted tag");
-        }
-
-        tagInstance->end = tsc;
-
-        manager->writer.insertTagInstance(*tagInstance);
-
-        currentTagInstances.erase(tagInstance);
-    }
-
-        break;
+    switch (tag.type) {
+    case TagType::Simple:
+        handleSimpleTag(tsc, tag, tagInstruction, tagInstance);
+    case TagType::Pipeline:
+        handlePipelineTag(tsc, tag, tagInstruction, tagInstance);
+    case TagType::Section:
+        handleSectionTag(tsc, tag, tagInstruction, tagInstance);
+    case TagType::Task:
+        handleTaskTag(tsc, tag, tagInstruction, tagInstance);
+    case TagType::IgnoreAll:
+        handleIgnoreAllTag(tagInstruction);
+    case TagType::ProcessAll:
+        handleProcessAllTag(tagInstruction);
+    case TagType::ProcessCalls:
+        handleProcessCallsTag(tagInstruction);
+    case TagType::ProcessAccesses:
+        handleProcessAccessesTag(tagInstruction);
+    case TagType::IgnoreCalls:
+        handleIgnoreCallsTag(tagInstruction);
+    case TagType::IgnoreAccesses:
+        handleIgnoreAccessesTag(tagInstruction);
     default:
-        CorruptedBufferException("Invalid type for TagInstruction");
+        CorruptedBufferException("Invalid tag type");
     }
+
+
 }
 
 void ThreadManager::handleCall(UINT64 tsc, int location) {
@@ -194,6 +195,9 @@ void ThreadManager::handleLocation(LocationDetails *location)
 
 void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
 {
+    if (callStack.empty())
+        return;
+
     Instruction i;
 
     i.type = InstructionType::Access;
@@ -212,6 +216,218 @@ std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId
     }
 
     return currentTagInstances.end();
+}
+
+void ThreadManager::handleSimpleTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator& tagInstance)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        if (tagInstance != currentTagInstances.end()) {
+            CorruptedBufferException("Starting an already started tag");
+        }
+
+        TagInstance ti;
+        ti.genId();
+
+        ti.start = tsc;
+        ti.tag = tag.id;
+        ti.thread = self.id;
+
+        currentTagInstances.push_front(ti);
+
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        if (tagInstance == currentTagInstances.end()) {
+            CorruptedBufferException("Stopping an unstarted tag");
+        }
+
+        tagInstance->end = tsc;
+
+        manager->writer.insertTagInstance(*tagInstance);
+
+        currentTagInstances.erase(tagInstance);
+    }
+
+        break;
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+}
+
+void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &instance)
+{
+
+}
+
+void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &instance)
+{
+
+}
+
+void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &instance)
+{
+
+}
+
+void ThreadManager::handleIgnoreAllTag(const TagInstruction &tagInstruction)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        ignoreAccesses = true;
+        ignoreCalls = true;
+
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        ignoreAccesses = false;
+        ignoreCalls = false;
+    }
+
+        break;
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+
+    updateChecks();
+}
+
+void ThreadManager::handleProcessAllTag(const TagInstruction &tagInstruction)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        processAccesses = true;
+        processCalls = true;
+
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        processAccesses = false;
+        processCalls = false;
+
+        break;
+    }
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+
+    updateChecks();
+}
+
+void ThreadManager::handleProcessCallsTag(const TagInstruction &tagInstruction)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        processCalls = true;
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        processCalls = false;
+        break;
+    }
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+
+    updateChecks();
+}
+
+void ThreadManager::handleProcessAccessesTag(const TagInstruction &tagInstruction)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        processAccesses = true;
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        processAccesses = false;
+        break;
+    }
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+
+    updateChecks();
+}
+
+void ThreadManager::handleIgnoreCallsTag(const TagInstruction &tagInstruction)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        ignoreCalls = true;
+
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        ignoreCalls = false;
+        break;
+    }
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+
+    updateChecks();
+}
+
+void ThreadManager::handleIgnoreAccessesTag(const TagInstruction &tagInstruction)
+{
+    switch (tagInstruction.type) {
+    case TagInstructionType::Start:
+    {
+        ignoreAccesses = true;
+        break;
+    }
+
+    case TagInstructionType::Stop:
+    {
+        ignoreAccesses = false;
+        break;
+
+    }
+    default:
+        CorruptedBufferException("Invalid type for TagInstruction");
+    }
+
+    updateChecks();
+}
+
+void ThreadManager::updateChecks()
+{
+    if (ignoreCalls)
+        processCallsComputed = false;
+    else if (processCalls)
+        processCallsComputed = true;
+    else if (interestingProgramPart)
+        processCallsComputed = true;
+    else
+        processCallsComputed = manager->processCallsByDefault;
+
+    if (ignoreAccesses)
+        processAccessesComputed = false;
+    else if (processAccesses)
+        processAccessesComputed = true;
+    else if (interestingProgramPart)
+        processAccessesComputed = true;
+    else
+        processAccessesComputed = manager->processAccessesByDefault;
 }
 
 void ThreadManager::lock()
