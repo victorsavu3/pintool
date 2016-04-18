@@ -86,7 +86,7 @@ Statement::~Statement() {
     connection->lock();
 
     if (int code = sqlite3_finalize(this->stmt) != SQLITE_OK)
-         SQLiteException(this->connection.get(), code, "Statemenet destructor");
+        SQLiteException(this->connection.get(), code, "Statemenet destructor");
 
     connection->unlock();
 }
@@ -247,7 +247,7 @@ void Statement::resetUnlocked() {
 
 void Statement::clearBindingsUnlocked() {
     if (int code = sqlite3_clear_bindings(this->stmt) != SQLITE_OK)
-       SQLiteException(this->connection.get(), code, "clearBindings");
+        SQLiteException(this->connection.get(), code, "clearBindings");
 }
 
 void Statement::stepUnlocked() {

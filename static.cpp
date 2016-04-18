@@ -11,11 +11,11 @@
 #include "filter.h"
 
 KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
-    "o", "data.db", "specify output file name");
+                            "o", "data.db", "specify output file name");
 
 
 KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
-    "f", "filter.yaml", "specify filter name");
+                            "f", "filter.yaml", "specify filter name");
 
 struct Manager {
     std::unique_ptr<SQLWriter> writer;

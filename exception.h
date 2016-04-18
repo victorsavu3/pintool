@@ -9,7 +9,7 @@ void Warn(std::string context, std::string err);
 void UnimplementedException(std::string msg);
 
 namespace SQLite {
-    class Connection;
+class Connection;
 }
 
 void SQLiteException(std::string err, int code, std::string context);

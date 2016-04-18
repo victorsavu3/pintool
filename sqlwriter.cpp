@@ -80,20 +80,20 @@ void SQLWriter::commit()
 
 void SQLWriter::createDatabase() {
     this->db->execute(
-            #include "create.sql.h"
-        );
+#include "create.sql.h"
+    );
 }
 
 void SQLWriter::runPragmas() {
     this->db->execute(
-            #include "writePragmas.sql.h"
-        );
+#include "writePragmas.sql.h"
+    );
 }
 
 void SQLWriter::clearDatabase() {
     this->db->execute(
-            #include "clear.sql.h"
-        );
+#include "clear.sql.h"
+    );
 }
 
 void SQLWriter::lock()

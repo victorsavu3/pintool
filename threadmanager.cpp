@@ -252,7 +252,7 @@ void ThreadManager::handleSimpleTag(UINT64 tsc, const Tag &tag, const TagInstruc
         currentTagInstances.erase(tagInstance);
     }
 
-        break;
+    break;
     default:
         CorruptedBufferException("Invalid type for TagInstruction");
     }
@@ -298,7 +298,7 @@ void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstru
         interestingProgramPart = false;
     }
 
-        break;
+    break;
     default:
         CorruptedBufferException("Invalid type for TagInstruction");
     }
@@ -344,7 +344,7 @@ void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstr
         interestingProgramPart = false;
     }
 
-        break;
+    break;
     default:
         CorruptedBufferException("Invalid type for TagInstruction");
     }
@@ -395,7 +395,9 @@ void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstructi
 
 void ThreadManager::endCurrentTaskTag(UINT64 tsc)
 {
-    auto tagInstance = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance) { return manager->tagIdTagMap[instance.tag].type == TagType::Task; } );
+    auto tagInstance = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance) {
+        return manager->tagIdTagMap[instance.tag].type == TagType::Task;
+    } );
 
     if (tagInstance != currentTagInstances.end()) {
         tagInstance->end = tsc;
@@ -423,7 +425,7 @@ void ThreadManager::handleIgnoreAllTag(const TagInstruction &tagInstruction)
         ignoreCalls = false;
     }
 
-        break;
+    break;
     default:
         CorruptedBufferException("Invalid type for TagInstruction");
     }

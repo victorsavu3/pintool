@@ -16,13 +16,13 @@ public:
 };
 
 class Image {
-  public:
+public:
     int id;
     std::string name;
 };
 
 class File {
-  public:
+public:
     int id;
     std::string name;
 
@@ -30,7 +30,7 @@ class File {
 };
 
 class Function {
-  public:
+public:
     int id;
     std::string name;
     std::string prototype;
@@ -40,7 +40,7 @@ class Function {
 };
 
 class SourceLocation {
-  public:
+public:
     int id;
 
     int function;
@@ -63,7 +63,7 @@ enum class TagType {
 };
 
 class Tag {
-  public:
+public:
     int id;
 
     std::string name;
@@ -142,14 +142,14 @@ public:
 };
 
 namespace std {
-    template <>
-    struct hash<SourceLocation>
+template <>
+struct hash<SourceLocation>
+{
+    std::size_t operator()(const SourceLocation& s) const
     {
-        std::size_t operator()(const SourceLocation& s) const
-        {
-            return (((s.function << 1) ^ s.line) << 1) ^ s.column;
-        }
-    };
+        return (((s.function << 1) ^ s.line) << 1) ^ s.column;
+    }
+};
 }
 
 

@@ -38,7 +38,7 @@ private:
     friend class Statement;
 };
 
-class NullClass{};
+class NullClass {};
 extern NullClass SQLNULL;
 
 class Statement : public std::enable_shared_from_this<Statement>
@@ -47,7 +47,9 @@ public:
     Statement(std::shared_ptr<Connection> connection, const char* sql);
     ~Statement();
 
-    void bind(int col, uint64_t val) { this->bind(col, (int64_t) val);}
+    void bind(int col, uint64_t val) {
+        this->bind(col, (int64_t) val);
+    }
     void bind(int, int64_t);
     void bind(int, int);
     void bind(int, const std::string&);
@@ -81,8 +83,12 @@ private:
     int lastBound;
 };
 
-template <> inline int Statement::column<int>(int col) { return columnInt(col); }
-template <> inline std::string Statement::column<std::string>(int col) { return columnString(col); }
+template <> inline int Statement::column<int>(int col) {
+    return columnInt(col);
+}
+template <> inline std::string Statement::column<std::string>(int col) {
+    return columnString(col);
+}
 
 class StatementBinder
 {
