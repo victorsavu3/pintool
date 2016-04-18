@@ -46,6 +46,7 @@ private:
     void handleSectionTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
     void handlePipelineTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
     void handleTaskTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
+    void endCurrentTaskTag(UINT64 tsc);
 
     void handleIgnoreAllTag(const TagInstruction& tagInstruction);
     void handleProcessAllTag(const TagInstruction& tagInstruction);
