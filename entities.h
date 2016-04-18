@@ -157,6 +157,14 @@ public:
     int column;
 };
 
+class InstructionTagInstance {
+public:
+    int id;
+
+    int instruction;
+    int tagInstance;
+};
+
 namespace std
 {
 template <>

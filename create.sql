@@ -52,6 +52,14 @@ CREATE TABLE Instruction(
   FOREIGN KEY(Segment) REFERENCES Segment(Id)
 );
 
+CREATE TABLE InstructionTagInstance(
+  Id INTEGER PRIMARY KEY NOT NULL,
+  Instructon INTEGER,
+  Tag INTEGER
+  FOREIGN KEY(Instructon) REFERENCES Instructon(Id),
+  FOREIGN KEY(Tag) REFERENCES Tag(Id)
+);
+
 CREATE TABLE Loop(
   Id INTEGER PRIMARY KEY NOT NULL,
   Function INTEGER,

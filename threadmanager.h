@@ -41,6 +41,8 @@ private:
     std::list<TagInstance> currentTagInstances;
     std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);
 
+    void insertCurrentTagInstances(int instruction);
+
     /* tag handlers */
     void handleSimpleTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
     void handleSectionTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);

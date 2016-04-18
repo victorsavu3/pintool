@@ -31,6 +31,7 @@ public:
     void insertCall(const Call&);
     void insertSegment(Segment&);
     void insertInstruction(Instruction&);
+    void insertInstructionTagInstance(InstructionTagInstance&);
 
     void insertTagHit(UINT64 tsc, int tagId, int thread);
 
@@ -59,6 +60,7 @@ private:
     std::shared_ptr<SQLite::Statement> insertCallStmt;
     std::shared_ptr<SQLite::Statement> insertSegmentStmt;
     std::shared_ptr<SQLite::Statement> insertInstructionStmt;
+    std::shared_ptr<SQLite::Statement> insertInstructionTagInstanceStmt;
 
     std::shared_ptr<SQLite::Statement> insertTagHitStmt;
 

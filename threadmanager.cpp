@@ -150,6 +150,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
         i.line = manager->locationDetails[lastCallLocation].line;
         i.column = manager->locationDetails[lastCallLocation].column;
         manager->writer.insertInstruction(i);
+        insertCurrentTagInstances(i.id);
 
         c.instruction = i.id;
         c.start = lastCallTSC;
@@ -215,6 +216,7 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
     i.column = manager->locationDetails[details->location].column;
 
     manager->writer.insertInstruction(i);
+    insertCurrentTagInstances(i.id);
 }
 
 std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)
@@ -226,6 +228,18 @@ std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId
     }
 
     return currentTagInstances.end();
+}
+
+void ThreadManager::insertCurrentTagInstances(int instruction)
+{
+    for (auto it : currentTagInstances) {
+        InstructionTagInstance iti;
+
+        iti.instruction = instruction;
+        iti.tagInstance = it.id;
+
+        manager->writer.insertInstructionTagInstance(iti);
+    }
 }
 
 void ThreadManager::handleSimpleTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator& tagInstance)
