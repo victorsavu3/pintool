@@ -86,11 +86,7 @@ add_custom_command(
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/sqlwriter.cpp
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h
-)
-set_source_files_properties(sqlwriter.cpp PROPERTIES GENERATED FALSE)
+set_source_files_properties(sqlwriter.cpp PROPERTIES OBJECT_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h;${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h;${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h)
 
 set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c create.sql writePragmas.sql clear.sql)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
