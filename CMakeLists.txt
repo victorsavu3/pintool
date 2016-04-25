@@ -6,7 +6,7 @@ include(ExternalProject)
 ExternalProject_Add (libsqlite
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/sqlite
     BUILD_IN_SOURCE 1
-    URL https://www.sqlite.org/2016/sqlite-amalgamation-3120000.zip
+    URL https://www.sqlite.org/2016/sqlite-amalgamation-3120200.zip
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     BUILD_IN_SOURCE 1
@@ -62,17 +62,17 @@ link_directories (${PIN_LIBRARY_DIRS})
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/create.sql
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sql/create.sql
     COMMAND echo "R\\\"=====\\\(" > ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
-    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/create.sql >> ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
+    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/sql/create.sql >> ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
     COMMAND echo "\\\)=====\\\"" >> ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h
 )
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/writePragmas.sql
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sql/writePragmas.sql
     COMMAND echo "R\\\"=====\\\(" > ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
-    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/writePragmas.sql >> ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
+    COMMAND cat ${CMAKE_CURRENT_SOURCE_DIR}/sql/writePragmas.sql >> ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
     COMMAND echo "\\\)=====\\\"" >> ${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h
 )
 
@@ -86,7 +86,7 @@ add_custom_command(
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-set_source_files_properties(sqlwriter.cpp PROPERTIES OBJECT_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/create.sql.h;${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h;${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h)
+set_source_files_properties(sqlwriter.cpp PROPERTIES OBJECT_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h;${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h;${CMAKE_CURRENT_BINARY_DIR}/create.sql.h)
 
 set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c create.sql writePragmas.sql clear.sql)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
