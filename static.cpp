@@ -11,11 +11,11 @@
 #include "filter.h"
 
 KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
-                            "o", "data.db", "specify output file name");
+                            "db", "data.db", "specify output file name");
 
 
 KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
-                            "f", "filter.yaml", "specify filter name");
+                            "filter", "filter.yaml", "specify filter name");
 
 struct Manager
 {
@@ -159,12 +159,13 @@ int main(int argc, char * argv[])
     // prepare for image instrumentation mode
     PIN_InitSymbols();
 
+    if (PIN_Init(argc, argv)) return Usage();
+
+
     Manager* manager = new Manager;
 
     manager->writer.reset(new SQLWriter(KnobOutputFile.Value(), true));
     manager->filter.reset(new Filter(KnobFilterFile.Value()));
-
-    if (PIN_Init(argc, argv)) return Usage();
 
     IMG_AddInstrumentFunction(ImageLoad, (void*)manager);
     PIN_AddFiniFunction(Fini, (void*)manager);

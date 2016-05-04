@@ -12,13 +12,13 @@
 #include "exception.h"
 
 KNOB<string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool",
-                            "o", "data.db", "specify output file name");
+                            "db", "data.db", "specify output file name");
 
 KNOB<string> KnobInputFile(KNOB_MODE_WRITEONCE, "pintool",
-                           "i", "source.yaml", "specify source file name");
+                           "source", "source.yaml", "specify source file name");
 
 KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
-                            "f", "filter.yaml", "specify filter file name");
+                            "filter", "filter.yaml", "specify filter file name");
 
 BUFFER_ID bufId;
 
@@ -377,9 +377,9 @@ int main(int argc, char * argv[])
 {
     PIN_InitSymbols();
 
-    Manager* manager = new Manager(KnobOutputFile.Value(), KnobInputFile.Value(), KnobFilterFile.Value());
-
     if (PIN_Init(argc, argv)) return Usage();
+
+    Manager* manager = new Manager(KnobOutputFile.Value(), KnobInputFile.Value(), KnobFilterFile.Value());
 
     bufId = PIN_DefineTraceBuffer(sizeof(struct BufferEntry), 100000,
                                   BufferFull, (void*)manager);
