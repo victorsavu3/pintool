@@ -55,6 +55,7 @@ void SQLWriter::prepareStatements()
     insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type, Line) VALUES(?, ?, ?);");
     insertSegmentStmt = this->db->makeStatement("INSERT INTO Segment(Call, Type) VALUES(?, ?);");
     insertInstructionTagInstanceStmt = this->db->makeStatement("INSERT INTO InstructionTagInstance(Instruction, Tag) VALUES(?, ?);");
+    insertAccessStmt = this->db->makeStatement("INSERT INTO Access(Instruction, Position, Address, Size, Type) VALUES(?, ?, ?, ?, ?);");
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(TSC, TagInstruction, Thread) VALUES(?, ?, ?);");
 
@@ -234,6 +235,16 @@ void SQLWriter::insertInstructionTagInstance(InstructionTagInstance &instruction
 
     insertInstructionTagInstanceStmt << instructionTagInstance.instruction << instructionTagInstance.tagInstance;
     instructionTagInstance.id = insertInstructionTagInstanceStmt->executeInsert();
+
+    unlock();
+}
+
+void SQLWriter::insertAccess(Access & access)
+{
+    lock();
+
+    insertAccessStmt << access.instruction << access.position << access.address << access.size << static_cast<int>(access.type);
+    access.id = insertAccessStmt->executeInsert();
 
     unlock();
 }

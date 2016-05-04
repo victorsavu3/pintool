@@ -168,6 +168,26 @@ public:
     int tagInstance;
 };
 
+enum class AccessType
+{
+    Read = 1,
+    Write = 2
+};
+
+class Access {
+public:
+    int id;
+
+    int instruction;
+    int reference;
+    int position;
+
+    AccessType type;
+
+    UINT64 address;
+    int size;
+};
+
 namespace std
 {
 template <>

@@ -232,15 +232,31 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
     if (callStack.empty())
         return;
 
-    Instruction i;
+    Instruction instr;
 
-    i.type = InstructionType::Access;
-    i.segment = callStack.back().second;
-    i.line = manager->locationDetails[details->location].line;
-    i.column = manager->locationDetails[details->location].column;
+    instr.type = InstructionType::Access;
+    instr.segment = callStack.back().second;
+    instr.line = manager->locationDetails[details->location].line;
+    instr.column = manager->locationDetails[details->location].column;
 
-    manager->writer.insertInstruction(i);
-    insertCurrentTagInstances(i.id);
+    manager->writer.insertInstruction(instr);
+    insertCurrentTagInstances(instr.id);
+
+    for (int i=0;i < details->accesses.size(); i++) {
+        Access a;
+
+        a.instruction = instr.id;
+        a.position = i;
+        a.address = addresses[i];
+        a.size = details->accesses[i].size;
+        if (details->accesses[i].isRead) {
+            a.type = AccessType::Read;
+        } else {
+            a.type = AccessType::Write;
+        }
+
+        manager->writer.insertAccess(a);
+    }
 }
 
 std::list<TagInstance>::iterator ThreadManager::findCurrentTagInstance(int tagId)
