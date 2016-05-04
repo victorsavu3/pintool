@@ -50,9 +50,9 @@ void SQLWriter::prepareStatements()
     insertTagStmt = this->db->makeStatement("INSERT INTO Tag(Id, Name, Type) VALUES(?, ?, ?);");
     insertTagInstructionStmt = this->db->makeStatement("INSERT INTO TagInstruction(Tag, Location, Type) VALUES(?, ?, ?);");
     insertTagInstanceStmt = this->db->makeStatement("INSERT INTO TagInstance(Id, Tag, Start, End, Thread, Counter) VALUES(?, ?, ?, ?, ?, ?);");
-    insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, Instruction, StartTime, EndTSC, EndTime) VALUES(?, ?, ?, ?, ?);");
+    insertThreadStmt = this->db->makeStatement("INSERT INTO Thread(Id, CreateInstruction, JoinInstruction, Process, StartTime, EndTSC, EndTime) VALUES(?, ?, ?, ?, ?, ?, ?);");
     insertCallStmt = this->db->makeStatement("INSERT INTO Call(Id, Thread, Function, Instruction, Start, End) VALUES(?, ?, ?, ?, ?, ?);");
-    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type, Line, Column) VALUES(?, ?, ?, ?);");
+    insertInstructionStmt = this->db->makeStatement("INSERT INTO Instruction(Segment, Type, Line) VALUES(?, ?, ?);");
     insertSegmentStmt = this->db->makeStatement("INSERT INTO Segment(Call, Type) VALUES(?, ?);");
     insertInstructionTagInstanceStmt = this->db->makeStatement("INSERT INTO InstructionTagInstance(Instruction, Tag) VALUES(?, ?);");
 
@@ -189,7 +189,7 @@ void SQLWriter::insertThread(const Thread &thread )
 {
     lock();
 
-    insertThreadStmt << thread.id << thread.instruction << thread.startTime << thread.endTSC << thread.endTime;
+    insertThreadStmt << thread.id << thread.createInstruction << thread.joinInstruction << thread.process << thread.startTime << thread.endTSC << thread.endTime;
     insertThreadStmt->execute();
 
     unlock();
@@ -222,7 +222,7 @@ void SQLWriter::insertInstruction(Instruction & instruction)
 {
     lock();
 
-    insertInstructionStmt << instruction.segment << static_cast<int>(instruction.type) << instruction.line << instruction.column;
+    insertInstructionStmt << instruction.segment << static_cast<int>(instruction.type) << instruction.line;
     instruction.id = insertInstructionStmt->executeInsert();
 
     unlock();

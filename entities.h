@@ -108,7 +108,10 @@ public:
 class Thread : public EntityWithGeneratedId
 {
 public:
-    int instruction;
+    int createInstruction;
+    int joinInstruction;
+    int process;
+
     struct timespec startTime;
 
     struct timespec endTime;
