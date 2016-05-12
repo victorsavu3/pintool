@@ -22,12 +22,65 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 
 BUFFER_ID bufId;
 
+void processAlloc(Manager* manager, RTN rtn, AllocEntryType type) {
+
+    RTN_Open(rtn);
+
+    INS ins = RTN_InsHeadOnly(rtn);
+    ADDRINT address = INS_Address(ins);
+
+    manager->allocEnterAddresesToInstrument.insert(std::make_pair(address, type));
+
+    for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
+    {
+        ADDRINT address = INS_Address(ins);
+
+        if(INS_IsRet(ins))
+        {
+            manager->allocExitAddresesToInstrument.insert(address);
+        }
+    }
+
+    RTN_Close(rtn);
+}
+
 VOID ImageLoad(IMG img, VOID *v)
 {
     Manager* manager = (Manager*)v;
 
     manager->lock();
     PIN_LockClient();
+
+    RTN freeRtn = RTN_FindByName(img, "free");
+    if (RTN_Valid(freeRtn))
+    {
+        RTN_Open(freeRtn);
+
+        INS ins = RTN_InsHeadOnly(freeRtn);
+        ADDRINT address = INS_Address(ins);
+
+        manager->freeEnterAddresesToInstrument.insert(address);
+
+        RTN_Close(freeRtn);
+    }
+
+    RTN mallocRtn = RTN_FindByName(img, "malloc");
+    if (RTN_Valid(mallocRtn))
+    {
+        processAlloc(manager, mallocRtn, AllocEntryType::malloc);
+    }
+
+    RTN callocRtn = RTN_FindByName(img, "calloc");
+    if (RTN_Valid(callocRtn))
+    {
+        processAlloc(manager, callocRtn, AllocEntryType::calloc);
+    }
+
+    RTN reallocRtn = RTN_FindByName(img, "realloc");
+    if (RTN_Valid(reallocRtn))
+    {
+        processAlloc(manager, reallocRtn, AllocEntryType::realloc);
+    }
 
     INT32 column;
     INT32 line;
@@ -180,6 +233,65 @@ VOID Trace(TRACE trace, VOID *v)
             ADDRINT address = INS_Address(ins);
 
             {
+                auto it = manager->freeEnterAddresesToInstrument.find(address);
+
+                if (it != manager->freeEnterAddresesToInstrument.end())
+                {
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::Free), offsetof(struct BufferEntry, type),
+                                         IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct FreeBufferEntry, ref),
+                                         IARG_END);
+                }
+            }
+
+            {
+                auto it = manager->allocExitAddresesToInstrument.find(address);
+
+                if (it != manager->allocExitAddresesToInstrument.end())
+                {
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocExit), offsetof(struct BufferEntry, type),
+                                         IARG_FUNCRET_EXITPOINT_VALUE, offsetof(struct BufferEntry, data) + offsetof(struct AllocExitBufferEntry, ref),
+                                         IARG_END);
+                }
+            }
+
+            {
+                auto it = manager->allocEnterAddresesToInstrument.find(address);
+
+                if (it != manager->allocEnterAddresesToInstrument.end())
+                {
+                    switch(it->second) {
+                    case AllocEntryType::malloc:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
+                                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
+                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
+                                             IARG_END);
+                        break;
+                    case AllocEntryType::calloc:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
+                                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
+                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, num),
+                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
+                                             IARG_END);
+                        break;
+                    case AllocEntryType::realloc:
+                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
+                                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
+                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, ref),
+                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
+                                             IARG_END);
+                        break;
+                    default:
+                        UnimplementedException("Unknown allocator type");
+                    }
+                }
+            }
+
+            {
                 auto it = manager->tagAddressesToInstrument.find(address);
 
                 if (it != manager->tagAddressesToInstrument.end())
@@ -188,6 +300,7 @@ VOID Trace(TRACE trace, VOID *v)
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Tag), offsetof(struct BufferEntry, type),
                                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tsc),
                                          IARG_UINT32, static_cast<UINT32>(it->second.tagId), offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, tagId),
+                                         IARG_INST_PTR, offsetof(struct BufferEntry, data) + offsetof(struct TagBufferEntry, address),
                                          IARG_END);
                 }
             }
@@ -214,6 +327,7 @@ VOID Trace(TRACE trace, VOID *v)
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::CallEnter), offsetof(struct BufferEntry, type),
                                          IARG_UINT32, static_cast<UINT32>(it->second.functionId), offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, functionId),
                                          IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, tsc),
+                                         IARG_REG_VALUE, REG_GBP, offsetof(struct BufferEntry, data) + offsetof(struct CallEnterBufferEntry, rbp),
                                          IARG_END);
                 }
             }

@@ -25,17 +25,42 @@ private:
 
     void handleEntry(struct BufferEntry*);
 
-    void handleTag(UINT64 tsc, int tagInstructionId);
+    void handleTag(UINT64 tsc, int tagInstructionId, ADDRINT address);
     int lastTagHitId;
+    ADDRINT lastHitAddress;
 
-    void handleCallEnter(UINT64 tsc,int functionId);
+    void handleCallEnter(UINT64 tsc,int functionId, UINT64 rbp);
     void handleCall(UINT64 tsc, int location);
     void handleRet(UINT64 tsc, int functionId);
     void handleLocation(const LocationDetails &location);
-    std::list<std::pair<Call, int> > callStack;
+
+    void handleFree(ADDRINT address);
+    void handleAllocExit(ADDRINT address);
+    void handleAllocEnter(AllocEnterBufferEntry entry);
+    void handleMalloc(ADDRINT address, UINT64 size);
+    void handleCalloc(ADDRINT address, UINT64 num, UINT64 size);
+    void handleRealloc(ADDRINT address, ADDRINT old, UINT64 size);
+    void clearStackReferences(ADDRINT rbp);
+
+    struct ReferenceData {
+          Reference ref;
+    };
+
+    bool inAlloc;
+    AllocEnterBufferEntry alloc;
+    std::map<ADDRINT, ReferenceData> references;
+
+    struct CallData {
+          Call call;
+          int segment;
+          UINT64 rbp;
+    };
+
+    std::list<CallData> callStack;
     UINT64 lastCallTSC;
     int lastCallLocation;
 
+    int getReference(ADDRINT address, int size);
     void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7]);
 
     std::list<TagInstance> currentTagInstances;

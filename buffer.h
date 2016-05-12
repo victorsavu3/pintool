@@ -27,6 +27,7 @@ struct CallEnterBufferEntry
 {
     UINT32 functionId;
     UINT64 tsc;
+    UINT64 rbp;
 };
 
 struct RetBufferEntry
@@ -39,6 +40,7 @@ struct TagBufferEntry
 {
     UINT32 tagId;
     UINT64 tsc;
+    ADDRINT address;
 };
 
 struct AccessInstructionBufferEntry
@@ -47,9 +49,20 @@ struct AccessInstructionBufferEntry
     ADDRINT addresses[7];
 };
 
+enum class AllocEntryType : UINT32
+{
+    malloc,
+    calloc,
+    realloc
+};
+
 struct AllocEnterBufferEntry
 {
-    UINT32 size;
+    AllocEntryType type;
+
+    UINT64 num;
+    UINT64 size;
+    ADDRINT ref;
 };
 
 struct AllocExitBufferEntry

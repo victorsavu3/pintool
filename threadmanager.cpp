@@ -13,6 +13,7 @@ ThreadManager::ThreadManager(Manager *manager, THREADID tid) : manager(manager),
     clock_gettime(CLOCK_REALTIME, &self.startTime);
 
     self.genId();
+    inAlloc = false;
 
     processAccesses = false;
     processCalls = false;
@@ -49,10 +50,10 @@ void ThreadManager::threadStopped()
     {
         std::ostringstream oss;
 
-        oss << "Closing " << callStack.back().first.function << " a end of thread";
+        oss << "Closing " << callStack.back().call.function << " a end of thread";
         Warn("threadStopped", oss.str());
 
-        Call c = callStack.back().first;
+        Call c = callStack.back().call;
         callStack.pop_back();
 
         c.end = self.endTSC;
@@ -63,10 +64,13 @@ void ThreadManager::threadStopped()
 
 void ThreadManager::handleEntry(BufferEntry * entry)
 {
+    if (inAlloc && entry->type != BuferEntryType::AllocExit)
+        CorruptedBufferException("Received event while inside alloc");
+
     switch (entry->type)
     {
     case BuferEntryType::Tag:
-        handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId);
+        handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId, entry->data.tag.address);
         break;
     case BuferEntryType::Call:
         if (processCallsComputed)
@@ -76,7 +80,7 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         break;
     case BuferEntryType::CallEnter:
         if (processCallsComputed)
-            handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId);
+            handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId, entry->data.callEnter.rbp);
         break;
     case BuferEntryType::Ret:
         if (processCallsComputed)
@@ -88,6 +92,15 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         if (processAccessesComputed)
             handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
         break;
+    case BuferEntryType::AllocEnter:
+        handleAllocEnter(entry->data.allocenter);
+        break;
+    case BuferEntryType::AllocExit:
+        handleAllocExit(entry->data.allocexit.ref);
+        break;
+    case BuferEntryType::Free:
+        handleFree(entry->data.free.ref);
+        break;
     default:
         CorruptedBufferException("Invalid entry type");
     }
@@ -95,12 +108,13 @@ void ThreadManager::handleEntry(BufferEntry * entry)
 
 #include <sstream>
 
-void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
+void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId, ADDRINT address)
 {
-    if (tagInstructionId == lastTagHitId)
+    if (tagInstructionId == lastTagHitId && address != lastHitAddress)
         return;
 
     lastTagHitId = tagInstructionId;
+    lastHitAddress = address;
 
     manager->writer.insertTagHit(tsc, tagInstructionId, self.id);
 
@@ -145,7 +159,13 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId)
         CorruptedBufferException("Invalid tag type");
     }
 
-
+    if (currentTagInstances.size() > 0) {
+        interestingProgramPart = true;
+        updateChecks();
+    } else {
+        interestingProgramPart = false;
+        updateChecks();
+    }
 }
 
 void ThreadManager::handleCall(UINT64 tsc, int location)
@@ -154,7 +174,7 @@ void ThreadManager::handleCall(UINT64 tsc, int location)
     lastCallLocation = location;
 }
 
-void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
+void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp)
 {
     Call c;
     c.genId();
@@ -169,7 +189,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
     {
         Instruction i;
 
-        i.segment = callStack.back().second;
+        i.segment = callStack.back().segment;
         i.type = InstructionType::Call;
         i.line = manager->locationDetails[lastCallLocation].line;
         i.column = manager->locationDetails[lastCallLocation].column;
@@ -189,7 +209,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId)
     s.type = SegmentType::Standard;
     manager->writer.insertSegment(s);
 
-    callStack.push_back(std::make_pair(c, s.id));
+    callStack.push_back({c, s.id, rbp});
 }
 
 void ThreadManager::handleRet(UINT64 tsc, int functionId)
@@ -197,7 +217,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     if (callStack.empty())
         CorruptedBufferException("Return from empty callstack");
 
-    Call c = callStack.back().first;
+    Call c = callStack.back().call;
 
     while (c.function != functionId && !callStack.empty())
     {
@@ -207,12 +227,16 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
 
         Warn("handleRet", oss.str());
 
+        clearStackReferences(callStack.back().rbp);
+
         callStack.pop_back();
-        c = callStack.back().first;
+        c = callStack.back().call;
     }
 
     if (callStack.empty())
         CorruptedBufferException("Could not find call in callstack");
+
+    clearStackReferences(callStack.back().rbp);
 
     callStack.pop_back();
 
@@ -227,6 +251,174 @@ void ThreadManager::handleLocation(const LocationDetails& location)
         return;
 }
 
+void ThreadManager::handleFree(ADDRINT address)
+{
+    if (!callStack.empty()){
+        Instruction instr;
+
+        instr.type = InstructionType::Free;
+        instr.segment = callStack.back().segment;
+        instr.line = -1;
+        instr.column = -1;
+
+        manager->writer.insertInstruction(instr);
+        insertCurrentTagInstances(instr.id);
+    }
+
+    references.erase(address);
+}
+
+void ThreadManager::handleAllocExit(ADDRINT address)
+{
+    if (!inAlloc)
+        CorruptedBufferException("Exit of unknown alloc");
+
+    switch(alloc.type) {
+    case AllocEntryType::malloc:
+        handleMalloc(address, alloc.size);
+        break;
+    case AllocEntryType::calloc:
+        handleCalloc(address, alloc.num, alloc.size);
+        break;
+    case AllocEntryType::realloc:
+        handleRealloc(address, alloc.ref, alloc.size);
+        break;
+    default:
+        CorruptedBufferException("Invalid allocation type");
+    }
+
+    inAlloc = false;
+}
+
+void ThreadManager::handleAllocEnter(AllocEnterBufferEntry entry)
+{
+    if (inAlloc)
+        CorruptedBufferException("Already inside alloc");
+
+    alloc = entry;
+    inAlloc = true;
+}
+
+void ThreadManager::handleMalloc(ADDRINT address, UINT64 size)
+{
+    ReferenceData data;
+    data.ref.size = size;
+    data.ref.type = ReferenceType::Heap;
+
+    std::stringstream stream;
+    stream << std::hex << address;
+    data.ref.name = stream.str();
+
+    if(!callStack.empty()) {
+        Instruction instr;
+
+        instr.type = InstructionType::Alloc;
+        instr.segment = callStack.back().segment;
+        instr.line = -1;
+        instr.column = -1;
+
+        manager->writer.insertInstruction(instr);
+        insertCurrentTagInstances(instr.id);
+
+        data.ref.allocator = instr.id;
+    } else {
+        data.ref.allocator = -1;
+    }
+
+    manager->writer.insertReference(data.ref);
+
+    references.insert(std::make_pair(address, data));
+}
+
+void ThreadManager::handleCalloc(ADDRINT address, UINT64 num, UINT64 size)
+{
+    handleMalloc(address, num*size);
+}
+
+void ThreadManager::handleRealloc(ADDRINT address, ADDRINT old, UINT64 size)
+{
+    handleFree(old);
+    handleMalloc(address, size);
+}
+
+void ThreadManager::clearStackReferences(ADDRINT rbp)
+{
+    auto it = references.lower_bound(rbp);
+
+    if (it == references.end())
+        return;
+
+    auto itEnd = it;
+    auto itStart = references.end();
+
+    while (it != references.end() && it->second.ref.type == ReferenceType::Stack) {
+        itStart = it;
+        it--;
+    }
+
+    if (itStart == references.end())
+        return;
+
+    references.erase(itStart, itEnd);
+}
+
+int ThreadManager::getReference(ADDRINT address, int size)
+{
+    {
+        auto it = references.find(address);
+
+        if (it != references.end()) {
+            return it->second.ref.id;
+        }
+    }
+
+    {
+        auto it = references.lower_bound(address);
+
+        if (it != references.end() && --it != references.end()) {
+            if (address < it->first + it->second.ref.size) {
+                return it->second.ref.id;
+            }
+        }
+    }
+
+    if (!callStack.empty()) {
+        ADDRINT rbp = callStack.back().rbp;
+
+        if (address <= rbp && address > rbp - 1000000) { // TODO find real stack end using DWARF
+            ReferenceData data;
+            data.ref.size = size;
+            data.ref.type = ReferenceType::Stack;
+            data.ref.allocator = -1;
+
+            std::stringstream stream;
+            stream << "S: " << std::hex << (ADDRDELTA)address - (ADDRDELTA)rbp;
+            data.ref.name = stream.str();
+
+            manager->writer.insertReference(data.ref);
+
+            references.insert(std::make_pair(address, data));
+
+            return data.ref.id;
+        }
+    }
+
+    ReferenceData data;
+    data.ref.size = size;
+    data.ref.type = ReferenceType::Global;
+    data.ref.allocator = -1;
+
+    std::stringstream stream;
+    stream << "G: " << std::hex << address;
+    data.ref.name = stream.str();
+
+    manager->writer.insertReference(data.ref);
+
+    references.insert(std::make_pair(address, data));
+
+    return data.ref.id;
+}
+
 void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
 {
     if (callStack.empty())
@@ -235,7 +427,7 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
     Instruction instr;
 
     instr.type = InstructionType::Access;
-    instr.segment = callStack.back().second;
+    instr.segment = callStack.back().segment;
     instr.line = manager->locationDetails[details->location].line;
     instr.column = manager->locationDetails[details->location].column;
 
@@ -245,6 +437,7 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
     for (int i=0;i < details->accesses.size(); i++) {
         Access a;
 
+        a.reference = getReference(addresses[i], details->accesses[i].size);
         a.instruction = instr.id;
         a.position = i;
         a.address = addresses[i];
@@ -333,7 +526,7 @@ void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstru
     {
         if (tagInstance != currentTagInstances.end())
         {
-            CorruptedBufferException("Starting an already started tag");
+            return; // Section tag can be set on loop header
         }
 
         TagInstance ti;
@@ -639,7 +832,9 @@ void ThreadManager::updateChecks()
     else
         processCallsComputed = manager->processCallsByDefault;
 
-    if (ignoreAccesses)
+    if (!processCallsComputed)
+        processAccessesComputed = false;
+    else if (ignoreAccesses)
         processAccessesComputed = false;
     else if (processAccesses)
         processAccessesComputed = true;

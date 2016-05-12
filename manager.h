@@ -57,6 +57,9 @@ public:
     std::map<ADDRINT, CallEnterBufferEntry> callAddressesToInstrument;
     std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
     std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
+    std::set<ADDRINT> freeEnterAddresesToInstrument;
+    std::map<ADDRINT, AllocEntryType> allocEnterAddresesToInstrument;
+    std::set<ADDRINT> allocExitAddresesToInstrument;
 
     std::map<ADDRINT, int> accessToInstrument;
     std::vector<AccessInstructionDetails> accessDetails;

@@ -188,6 +188,24 @@ public:
     int size;
 };
 
+enum class ReferenceType {
+    Stack = 1,
+    Heap = 2,
+    Static = 3,
+    Global = 4,
+    Unknown = 5
+  };
+
+class Reference {
+public:
+    int id;
+
+    std::string name;
+    int size;
+    ReferenceType type;
+    int allocator;
+};
+
 namespace std
 {
 template <>
