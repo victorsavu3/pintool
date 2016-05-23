@@ -7,6 +7,7 @@
 Manager::Manager(const string &db, const string &source, const string &filter) : writer(db), filter(filter)
 {
     PIN_MutexInit(&mutex);
+    PIN_MutexInit(&knownAllocationsLock);
 
     processAccessesByDefault = false;
     processCallsByDefault = true;
@@ -30,6 +31,16 @@ int Manager::getLocation(ADDRINT address, int functionId)
     locationDetails.push_back(detail);
 
     return locationDetails.size() - 1;
+}
+
+void Manager::lockKnownAllocations()
+{
+    PIN_MutexLock(&knownAllocationsLock);
+}
+
+void Manager::unlockKnownAllocations()
+{
+    PIN_MutexUnlock(&knownAllocationsLock);
 }
 
 void Manager::bufferFull(BufferEntry* entries, UINT64 count, THREADID tid)

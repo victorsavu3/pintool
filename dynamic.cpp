@@ -22,6 +22,82 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 
 BUFFER_ID bufId;
 
+
+VOID MallocEnter(ADDRINT d, UINT64 size, UINT64 tsc, THREADID tid)
+{
+    Manager* manager = (Manager*)d;
+
+    AllocEnterBufferEntry entry;
+
+    entry.type = AllocEntryType::malloc;
+    entry.size = size;
+    entry.tsc = tsc;
+    entry.thread = tid;
+
+    manager->lockKnownAllocations();
+
+    manager->knownAllocationsInProgess.insert(std::make_pair(tid, entry));
+
+    manager->unlockKnownAllocations();
+}
+
+VOID CallocEnter(ADDRINT d, UINT64 num, UINT64 size, UINT64 tsc, THREADID tid)
+{
+    Manager* manager = (Manager*)d;
+
+    AllocEnterBufferEntry entry;
+
+    entry.type = AllocEntryType::calloc;
+    entry.size = size;
+    entry.num = num;
+    entry.tsc = tsc;
+    entry.thread = tid;
+
+    manager->lockKnownAllocations();
+
+    manager->knownAllocationsInProgess.insert(std::make_pair(tid, entry));
+
+    manager->unlockKnownAllocations();
+}
+
+VOID ReallocEnter(ADDRINT d, ADDRINT ref, UINT64 size, UINT64 tsc, THREADID tid)
+{
+    Manager* manager = (Manager*)d;
+
+    AllocEnterBufferEntry entry;
+
+    entry.type = AllocEntryType::realloc;
+    entry.size = size;
+    entry.ref = ref;
+    entry.tsc = tsc;
+    entry.thread = tid;
+
+    manager->lockKnownAllocations();
+
+    manager->knownAllocationsInProgess.insert(std::make_pair(tid, entry));
+
+    manager->unlockKnownAllocations();
+}
+
+VOID AllocExit(ADDRINT d, ADDRINT ref, THREADID tid)
+{
+    Manager* manager = (Manager*)d;
+
+    manager->lockKnownAllocations();
+
+    auto it = manager->knownAllocationsInProgess.find(tid);
+
+    if (it == manager->knownAllocationsInProgess.end()) {
+        manager->unlockKnownAllocations();
+        return;
+    }
+
+    manager->knownAllocations[it->second].insert(std::make_pair(it->second.tsc, ref));
+    manager->knownAllocationsInProgess.erase(it);
+
+    manager->unlockKnownAllocations();
+}
+
 void processAlloc(Manager* manager, RTN rtn, AllocEntryType type) {
 
     RTN_Open(rtn);
@@ -31,15 +107,22 @@ void processAlloc(Manager* manager, RTN rtn, AllocEntryType type) {
 
     manager->allocEnterAddresesToInstrument.insert(std::make_pair(address, type));
 
-    for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
-    {
-        ADDRINT address = INS_Address(ins);
-
-        if(INS_IsRet(ins))
-        {
-            manager->allocExitAddresesToInstrument.insert(address);
-        }
+    switch(type) {
+    case AllocEntryType::malloc:
+        RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)MallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_TSC, IARG_THREAD_ID, IARG_END);
+        break;
+    case AllocEntryType::calloc:
+        RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)CallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_TSC, IARG_THREAD_ID, IARG_END);
+        break;
+    case AllocEntryType::realloc:
+        RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)ReallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_TSC, IARG_THREAD_ID, IARG_END);
+        break;
+    default:
+        CorruptedBufferException("Invalid allocation type");
     }
+
+
+    RTN_InsertCall( rtn, IPOINT_AFTER, (AFUNPTR)AllocExit, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCRET_EXITPOINT_VALUE, IARG_THREAD_ID, IARG_END);
 
     RTN_Close(rtn);
 }
@@ -241,18 +324,8 @@ VOID Trace(TRACE trace, VOID *v)
                                          IARG_UINT32, static_cast<UINT32>(BuferEntryType::Free), offsetof(struct BufferEntry, type),
                                          IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct FreeBufferEntry, ref),
                                          IARG_END);
-                }
-            }
 
-            {
-                auto it = manager->allocExitAddresesToInstrument.find(address);
-
-                if (it != manager->allocExitAddresesToInstrument.end())
-                {
-                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocExit), offsetof(struct BufferEntry, type),
-                                         IARG_FUNCRET_EXITPOINT_VALUE, offsetof(struct BufferEntry, data) + offsetof(struct AllocExitBufferEntry, ref),
-                                         IARG_END);
+                    continue;
                 }
             }
 
@@ -266,6 +339,8 @@ VOID Trace(TRACE trace, VOID *v)
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
                                              IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, tsc),
+                                             IARG_THREAD_ID, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, thread),
                                              IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
                                              IARG_END);
                         break;
@@ -273,6 +348,8 @@ VOID Trace(TRACE trace, VOID *v)
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
                                              IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, tsc),
+                                             IARG_THREAD_ID, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, thread),
                                              IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, num),
                                              IARG_FUNCARG_ENTRYPOINT_VALUE, 1, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
                                              IARG_END);
@@ -281,6 +358,8 @@ VOID Trace(TRACE trace, VOID *v)
                         INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
                                              IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, tsc),
+                                             IARG_THREAD_ID, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, thread),
                                              IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, ref),
                                              IARG_FUNCARG_ENTRYPOINT_VALUE, 1, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
                                              IARG_END);
@@ -288,6 +367,8 @@ VOID Trace(TRACE trace, VOID *v)
                     default:
                         UnimplementedException("Unknown allocator type");
                     }
+
+                    continue;
                 }
             }
 

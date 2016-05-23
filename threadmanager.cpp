@@ -64,8 +64,9 @@ void ThreadManager::threadStopped()
 
 void ThreadManager::handleEntry(BufferEntry * entry)
 {
-    if (inAlloc && entry->type != BuferEntryType::AllocExit)
-        CorruptedBufferException("Received event while inside alloc");
+    if (inAlloc) {
+        handleAfterAlloc();
+    }
 
     switch (entry->type)
     {
@@ -94,9 +95,6 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         break;
     case BuferEntryType::AllocEnter:
         handleAllocEnter(entry->data.allocenter);
-        break;
-    case BuferEntryType::AllocExit:
-        handleAllocExit(entry->data.allocexit.ref);
         break;
     case BuferEntryType::Free:
         handleFree(entry->data.free.ref);
@@ -253,6 +251,16 @@ void ThreadManager::handleLocation(const LocationDetails& location)
 
 void ThreadManager::handleFree(ADDRINT address)
 {
+    auto it = references.find(address);
+
+    if (it == references.end())
+        return;
+
+    if(it->second.accesses.empty()) {
+        references.erase(address);
+        return;
+    }
+
     if (!callStack.empty()){
         Instruction instr;
 
@@ -263,15 +271,55 @@ void ThreadManager::handleFree(ADDRINT address)
 
         manager->writer.insertInstruction(instr);
         insertCurrentTagInstances(instr.id);
+
+        it->second.ref.deallocator = instr.id;
+    } else {
+        it->second.ref.deallocator = -1;
     }
+
+    manager->writer.insertReference(it->second.ref);
 
     references.erase(address);
 }
 
-void ThreadManager::handleAllocExit(ADDRINT address)
+void ThreadManager::handleAfterAlloc()
 {
-    if (!inAlloc)
-        CorruptedBufferException("Exit of unknown alloc");
+    ADDRINT address;
+
+    manager->lockKnownAllocations();
+
+    auto it = manager->knownAllocations.find(alloc);
+
+    if (it == manager->knownAllocations.end() || it->second.empty()) {
+        manager->unlockKnownAllocations();
+        return;
+    }
+
+    auto next = it->second.lower_bound(alloc.tsc);
+    auto rem = next;
+
+    if (next == it->second.end()) {
+        rem = it->second.end();
+        rem--;
+    } else {
+        if (next->first != alloc.tsc) {
+            next--;
+
+            if (next != it->second.end()) {
+                INT64 d1 = abs(next->first - alloc.tsc);
+                INT64 d2 = abs(rem->first - alloc.tsc);
+
+                if (d1 < d2) {
+                    rem = next;
+                }
+            }
+        }
+    }
+
+    address = rem->second;
+    it->second.erase(rem);
+
+    manager->unlockKnownAllocations();
 
     switch(alloc.type) {
     case AllocEntryType::malloc:
@@ -292,9 +340,6 @@ void ThreadManager::handleAllocExit(ADDRINT address)
 
 void ThreadManager::handleAllocEnter(AllocEnterBufferEntry entry)
 {
-    if (inAlloc)
-        CorruptedBufferException("Already inside alloc");
-
     alloc = entry;
     inAlloc = true;
 }
@@ -325,7 +370,8 @@ void ThreadManager::handleMalloc(ADDRINT address, UINT64 size)
         data.ref.allocator = -1;
     }
 
-    manager->writer.insertReference(data.ref);
+    // if (references.find(address) != references.end())
+    //     CorruptedBufferException("Address reused by allocation");
 
     references.insert(std::make_pair(address, data));
 }
@@ -362,13 +408,13 @@ void ThreadManager::clearStackReferences(ADDRINT rbp)
     references.erase(itStart, itEnd);
 }
 
-int ThreadManager::getReference(ADDRINT address, int size)
+ThreadManager::ReferenceData& ThreadManager::getReference(ADDRINT address, int size)
 {
     {
         auto it = references.find(address);
 
         if (it != references.end()) {
-            return it->second.ref.id;
+            return it->second;
         }
     }
 
@@ -377,7 +423,7 @@ int ThreadManager::getReference(ADDRINT address, int size)
 
         if (it != references.end() && --it != references.end()) {
             if (address < it->first + it->second.ref.size) {
-                return it->second.ref.id;
+                return it->second;
             }
         }
     }
@@ -390,16 +436,15 @@ int ThreadManager::getReference(ADDRINT address, int size)
             data.ref.size = size;
             data.ref.type = ReferenceType::Stack;
             data.ref.allocator = -1;
+            data.ref.deallocator = -1;
 
             std::stringstream stream;
-            stream << "S: " << std::hex << (ADDRDELTA)address - (ADDRDELTA)rbp;
+            stream << "S: " << std::hex << (ADDRDELTA)rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)rbp);
             data.ref.name = stream.str();
 
             manager->writer.insertReference(data.ref);
 
-            references.insert(std::make_pair(address, data));
-
-            return data.ref.id;
+            return references.insert(std::make_pair(address, data)).first->second;
         }
     }
 
@@ -407,6 +452,7 @@ int ThreadManager::getReference(ADDRINT address, int size)
     data.ref.size = size;
     data.ref.type = ReferenceType::Global;
     data.ref.allocator = -1;
+    data.ref.deallocator = -1;
 
     std::stringstream stream;
     stream << "G: " << std::hex << address;
@@ -414,9 +460,7 @@ int ThreadManager::getReference(ADDRINT address, int size)
 
     manager->writer.insertReference(data.ref);
 
-    references.insert(std::make_pair(address, data));
-
-    return data.ref.id;
+    return references.insert(std::make_pair(address, data)).first->second;
 }
 
 void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
@@ -436,8 +480,9 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
 
     for (int i=0;i < details->accesses.size(); i++) {
         Access a;
+        ReferenceData& data = getReference(addresses[i], details->accesses[i].size);
 
-        a.reference = getReference(addresses[i], details->accesses[i].size);
+        a.reference = data.ref.id;
         a.instruction = instr.id;
         a.position = i;
         a.address = addresses[i];
@@ -449,6 +494,8 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
         }
 
         manager->writer.insertAccess(a);
+
+        data.accesses.push_back(a);
     }
 }
 

@@ -59,7 +59,11 @@ public:
     std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
     std::set<ADDRINT> freeEnterAddresesToInstrument;
     std::map<ADDRINT, AllocEntryType> allocEnterAddresesToInstrument;
-    std::set<ADDRINT> allocExitAddresesToInstrument;
+
+    std::map<THREADID, AllocEnterBufferEntry> knownAllocationsInProgess;
+    std::map<AllocEnterBufferEntry, std::map<UINT64, ADDRINT> > knownAllocations;
+    void lockKnownAllocations();
+    void unlockKnownAllocations();
 
     std::map<ADDRINT, int> accessToInstrument;
     std::vector<AccessInstructionDetails> accessDetails;
@@ -91,6 +95,7 @@ private:
     std::map<THREADID, ThreadManager> threadmanagers;
 
     PIN_MUTEX mutex;
+    PIN_MUTEX knownAllocationsLock;
 };
 
 #endif // MANAGER_H

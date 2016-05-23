@@ -204,6 +204,7 @@ public:
     int size;
     ReferenceType type;
     int allocator;
+    int deallocator;
 };
 
 namespace std

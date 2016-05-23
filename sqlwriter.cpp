@@ -56,7 +56,7 @@ void SQLWriter::prepareStatements()
     insertSegmentStmt = this->db->makeStatement("INSERT INTO Segment(Call, Type) VALUES(?, ?);");
     insertInstructionTagInstanceStmt = this->db->makeStatement("INSERT INTO InstructionTagInstance(Instruction, Tag) VALUES(?, ?);");
     insertAccessStmt = this->db->makeStatement("INSERT INTO Access(Instruction, Position, Address, Size, Type, Reference) VALUES(?, ?, ?, ?, ?, ?);");
-    insertReferenceStmt = this->db->makeStatement("INSERT INTO Reference(Name, Size, Allocator, Type) VALUES(?, ?, ?, ?);");
+    insertReferenceStmt = this->db->makeStatement("INSERT INTO Reference(Name, Size, Allocator, Deallocator, Type) VALUES(?, ?, ?, ?, ?);");
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(TSC, TagInstruction, Thread) VALUES(?, ?, ?);");
 
@@ -254,7 +254,21 @@ void SQLWriter::insertReference(Reference & reference)
 {
     lock();
 
-    insertReferenceStmt << reference.name << reference.size << reference.allocator << static_cast<int>(reference.type);
+    if (reference.allocator > 0) {
+        if (reference.deallocator > 0) {
+            insertReferenceStmt << reference.name << reference.size << reference.allocator << reference.deallocator << static_cast<int>(reference.type);
+        } else {
+            insertReferenceStmt << reference.name << reference.size << reference.allocator << SQLite::SQLNULL << static_cast<int>(reference.type);
+        }
+
+    } else {
+        if (reference.deallocator > 0) {
+            insertReferenceStmt << reference.name << reference.size << SQLite::SQLNULL << reference.deallocator << static_cast<int>(reference.type);
+        } else {
+            insertReferenceStmt << reference.name << reference.size << SQLite::SQLNULL << SQLite::SQLNULL << static_cast<int>(reference.type);
+        }
+    }
+
     reference.id = insertReferenceStmt->executeInsert();
 
     unlock();
@@ -280,6 +294,9 @@ int SQLWriter::getFunctionIdByProperties(const string &name, int image, const st
     if (getFunctionIdByPropertiesStmt->stepRow())
     {
         Id = getFunctionIdByPropertiesStmt->column<int>(0);
+
+        if (Id == 0)
+            SQLWriterException("Could not read id", "getFunctionIdByProperties");
     }
     else
     {

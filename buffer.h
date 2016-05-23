@@ -4,6 +4,7 @@
 #include <pin.H>
 
 #include "entities.h"
+#include "exception.h"
 
 enum class BuferEntryType : UINT32
 {
@@ -13,7 +14,6 @@ enum class BuferEntryType : UINT32
     Tag,
     MemRef,
     AllocEnter,
-    AllocExit,
     Free
 };
 
@@ -51,24 +51,63 @@ struct AccessInstructionBufferEntry
 
 enum class AllocEntryType : UINT32
 {
-    malloc,
+    malloc = 1,
     calloc,
-    realloc
+    realloc,
+    unknown
 };
 
 struct AllocEnterBufferEntry
 {
+    AllocEnterBufferEntry() : type(AllocEntryType::unknown) {}
+
     AllocEntryType type;
+    UINT64 tsc;
+    THREADID thread;
 
     UINT64 num;
     UINT64 size;
     ADDRINT ref;
 };
 
-struct AllocExitBufferEntry
+inline bool operator==(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
 {
-    ADDRINT ref;
-};
+    if (lhs.type == rhs.type)
+        return true;
+
+    switch(lhs.type) {
+    case AllocEntryType::malloc:
+        return std::tie(lhs.size, lhs.thread) == std::tie(rhs.size, rhs.thread);
+    case AllocEntryType::calloc:
+        return std::tie(lhs.size, rhs.num, lhs.thread) == std::tie(rhs.size, rhs.num, rhs.thread);
+    case AllocEntryType::realloc:
+        return std::tie(lhs.size, lhs.ref, lhs.thread) == std::tie(rhs.size, rhs.ref, rhs.thread);
+    default:
+        CorruptedBufferException("Invalid AllocEntryType");
+    }
+}
+
+inline bool operator!=(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
+{
+    return !(lhs == rhs);
+}
+
+inline bool operator<(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
+{
+    if (lhs.type < rhs.type)
+        return true;
+
+    switch(lhs.type) {
+    case AllocEntryType::malloc:
+        return std::tie(lhs.size, lhs.thread) < std::tie(rhs.size, rhs.thread);
+    case AllocEntryType::calloc:
+        return std::tie(lhs.size, rhs.num, lhs.thread) < std::tie(rhs.size, rhs.num, rhs.thread);
+    case AllocEntryType::realloc:
+        return std::tie(lhs.size, lhs.ref, lhs.thread) < std::tie(rhs.size, rhs.ref, rhs.thread);
+    default:
+        CorruptedBufferException("Invalid AllocEntryType");
+    }
+}
 
 struct FreeBufferEntry
 {
@@ -84,7 +123,6 @@ union BufferEntryUnion
     TagBufferEntry tag;
     AccessInstructionBufferEntry memref;
     AllocEnterBufferEntry allocenter;
-    AllocExitBufferEntry allocexit;
     FreeBufferEntry free;
 };
 

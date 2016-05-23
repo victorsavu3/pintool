@@ -35,7 +35,7 @@ private:
     void handleLocation(const LocationDetails &location);
 
     void handleFree(ADDRINT address);
-    void handleAllocExit(ADDRINT address);
+    void handleAfterAlloc();
     void handleAllocEnter(AllocEnterBufferEntry entry);
     void handleMalloc(ADDRINT address, UINT64 size);
     void handleCalloc(ADDRINT address, UINT64 num, UINT64 size);
@@ -44,6 +44,7 @@ private:
 
     struct ReferenceData {
           Reference ref;
+          std::vector<Access> accesses;
     };
 
     bool inAlloc;
@@ -60,7 +61,7 @@ private:
     UINT64 lastCallTSC;
     int lastCallLocation;
 
-    int getReference(ADDRINT address, int size);
+    ReferenceData& getReference(ADDRINT address, int size);
     void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7]);
 
     std::list<TagInstance> currentTagInstances;
