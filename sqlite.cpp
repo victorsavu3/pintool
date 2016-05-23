@@ -87,7 +87,8 @@ Statement::Statement(std::shared_ptr<Connection> connection, const char* sql) : 
     }
 
     columnCount = sqlite3_column_count(stmt);
-    lastBound = -1;
+    paramCount = sqlite3_bind_parameter_count(stmt);
+    lastBound = 0;
 
     connection->unlock();
 }
@@ -106,6 +107,8 @@ void Statement::bind(int pos, int64_t val)
 {
     connection->lock();
 
+    checkBind(pos);
+
     if (int code = sqlite3_bind_int64(this->stmt, pos, (sqlite3_int64)val) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "bind int64_t");
 
@@ -115,6 +118,8 @@ void Statement::bind(int pos, int64_t val)
 void Statement::bind(int pos, int val )
 {
     connection->lock();
+
+    checkBind(pos);
 
     if (int code = sqlite3_bind_int(this->stmt, pos, val) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "bind int");
@@ -126,6 +131,8 @@ void Statement::bind(int pos, const std::string& val)
 {
     connection->lock();
 
+    checkBind(pos);
+
     if (int code = sqlite3_bind_text(this->stmt, pos, val.c_str(), -1, SQLITE_TRANSIENT) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "bind std::string");
 
@@ -135,6 +142,8 @@ void Statement::bind(int pos, const std::string& val)
 void Statement::bind(int pos, const char* val)
 {
     connection->lock();
+
+    checkBind(pos);
 
     if (int code = sqlite3_bind_text(this->stmt, pos, val, -1, SQLITE_TRANSIENT) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "bind char*");
@@ -156,25 +165,34 @@ void Statement::bind(int pos, struct timespec val)
     bind(pos, timeStringWithNanoseconds);
 }
 
-void Statement::bindNULL(int col)
+void Statement::bindNULL(int pos)
 {
     connection->lock();
 
-    if (int code = sqlite3_bind_null(this->stmt, col) != SQLITE_OK)
+    checkBind(pos);
+
+    if (int code = sqlite3_bind_null(this->stmt, pos) != SQLITE_OK)
         SQLiteException(this->connection.get(), code, "bindNULL");
 
     connection->unlock();
 }
 
+void Statement::checkBind(int pos)
+{
+    if (pos > paramCount || pos < 1) {
+        SQLiteException("Bining too many parameters", 0, "bindCheck");
+    }
+
+    if (pos > lastBound)
+    {
+        lastBound = pos;
+    }
+}
+
 void Statement::checkColumn(int col)
 {
     if(columnCount <= col)
-        SQLiteException("Request for column outside row", 0, "bind char*");
-
-    if (col > lastBound)
-    {
-        lastBound = col;
-    }
+        SQLiteException("Request for column outside row", 0, "checkColumn");
 }
 
 int Statement::columnInt(int col)
@@ -228,7 +246,7 @@ void Statement::reset()
 
 void Statement::clearBindings()
 {
-    lastBound = -1;
+    lastBound = 0;
 
     connection->lock();
 
@@ -271,7 +289,7 @@ void Statement::clearBindingsUnlocked()
 
 void Statement::stepUnlocked()
 {
-    if(lastBound != columnCount - 1)
+    if(lastBound != paramCount)
         SQLiteException("Not all parameters bound", 0, "stepUnlocked");
 
     if (int code = sqlite3_step(this->stmt) != SQLITE_DONE)

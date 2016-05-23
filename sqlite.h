@@ -59,7 +59,9 @@ public:
     void bind(int, struct timespec);
     void bindNULL(int);
 
+    void checkBind(int);
     void checkColumn(int);
+
     int columnInt(int);
     std::string columnString(int);
 
@@ -82,6 +84,7 @@ private:
     sqlite3_stmt* stmt;
     std::shared_ptr<Connection> connection;
     int columnCount;
+    int paramCount;
     int lastBound;
 };
 
