@@ -42,14 +42,8 @@ private:
     void handleRealloc(ADDRINT address, ADDRINT old, UINT64 size);
     void clearStackReferences(ADDRINT rbp);
 
-    struct ReferenceData {
-          Reference ref;
-          std::vector<Access> accesses;
-    };
-
     bool inAlloc;
     AllocEnterBufferEntry alloc;
-    std::map<ADDRINT, ReferenceData> references;
 
     struct CallData {
           Call call;
@@ -65,7 +59,9 @@ private:
     void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7]);
 
     std::list<TagInstance> currentTagInstances;
+    std::map<int, TagType> tagInstanceType;
     std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);
+    std::map<int, std::set<int> > containerTagInstanceChildren;
 
     void insertCurrentTagInstances(int instruction);
 
@@ -73,8 +69,10 @@ private:
     void handleSimpleTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
     void handleSectionTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
     void handlePipelineTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
-    void handleTaskTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
-    void endCurrentTaskTag(UINT64 tsc);
+    void handleSectionTaskTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
+    void handlePipelineTaskTag(UINT64 tsc, const Tag& tag, const TagInstruction& tagInstruction, std::list<TagInstance>::iterator& instance);
+    void endCurrentSectionTaskTag(UINT64 tsc);
+    void endCurrentPipelineTaskTag(UINT64 tsc);
 
     void handleIgnoreAllTag(const TagInstruction& tagInstruction);
     void handleProcessAllTag(const TagInstruction& tagInstruction);
@@ -83,6 +81,12 @@ private:
     void handleProcessAccessesTag(const TagInstruction& tagInstruction);
     void handleIgnoreCallsTag(const TagInstruction& tagInstruction);
     void handleIgnoreAccessesTag(const TagInstruction& tagInstruction);
+
+    /* Dependency analysis */
+
+    std::map<int, std::map<ADDRINT, std::set<int> >> tagAccessingReference;
+    void recordTagAccess(TagInstance& instance, ADDRINT address, int reference, int access);
+    void closeTagInstanceAccesses(const std::set<int>& tagInstances);
 
 
     /* Ignore checks */

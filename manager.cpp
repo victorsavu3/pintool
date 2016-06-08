@@ -43,6 +43,17 @@ void Manager::unlockKnownAllocations()
     PIN_MutexUnlock(&knownAllocationsLock);
 }
 
+void Manager::lockReferences()
+{
+    PIN_MutexLock(&referencesLock);
+}
+
+void Manager::unlockReferences()
+{
+    PIN_MutexUnlock(&referencesLock);
+}
+
+
 void Manager::bufferFull(BufferEntry* entries, UINT64 count, THREADID tid)
 {
     lock();
@@ -148,9 +159,13 @@ void Manager::loadTags(const string &file)
         {
             t.type = TagType::Simple;
         }
-        else if (typeName == "Task")
+        else if (typeName == "SectionTask")
         {
-            t.type = TagType::Task;
+            t.type = TagType::SectionTask;
+        }
+        else if (typeName == "PipelineTask")
+        {
+            t.type = TagType::PipelineTask;
         }
         else
         {

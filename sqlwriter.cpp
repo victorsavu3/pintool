@@ -57,6 +57,7 @@ void SQLWriter::prepareStatements()
     insertInstructionTagInstanceStmt = this->db->makeStatement("INSERT INTO InstructionTagInstance(Instruction, Tag) VALUES(?, ?);");
     insertAccessStmt = this->db->makeStatement("INSERT INTO Access(Instruction, Position, Address, Size, Type, Reference) VALUES(?, ?, ?, ?, ?, ?);");
     insertReferenceStmt = this->db->makeStatement("INSERT INTO Reference(Name, Size, Allocator, Deallocator, Type) VALUES(?, ?, ?, ?, ?);");
+    insertConflictStmt = this->db->makeStatement("INSERT INTO Conflict(Reference TagInstance1, TagInstance2) VALUES(?, ?, ?)");
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(TSC, TagInstruction, Thread) VALUES(?, ?, ?);");
 
@@ -270,6 +271,16 @@ void SQLWriter::insertReference(Reference & reference)
     }
 
     reference.id = insertReferenceStmt->executeInsert();
+
+    unlock();
+}
+
+void SQLWriter::insertConflict(Conflict & conflict)
+{
+    lock();
+
+    insertConflictStmt << conflict.reference << conflict.tagInstance1 << conflict.tagInstance2;
+    conflict.id = insertConflictStmt->executeInsert();
 
     unlock();
 }

@@ -11,6 +11,7 @@ class Manager;
 struct MemoryOperationDetails;
 struct AccessInstructionDetails;
 struct LocationDetails;
+struct ReferenceData;
 
 #include "sqlwriter.h"
 #include "entities.h"
@@ -36,6 +37,15 @@ struct AccessInstructionDetails
 {
     std::vector<MemoryOperationDetails> accesses;
     int location;
+};
+
+struct ReferenceData {
+    ReferenceData() {
+        wasAccessed = false;
+    }
+
+      Reference ref;
+      bool wasAccessed;
 };
 
 class Manager
@@ -64,6 +74,10 @@ public:
     std::map<AllocEnterBufferEntry, std::map<UINT64, ADDRINT> > knownAllocations;
     void lockKnownAllocations();
     void unlockKnownAllocations();
+
+    std::map<ADDRINT, ReferenceData> references;
+    void lockReferences();
+    void unlockReferences();
 
     std::map<ADDRINT, int> accessToInstrument;
     std::vector<AccessInstructionDetails> accessDetails;
@@ -96,6 +110,7 @@ private:
 
     PIN_MUTEX mutex;
     PIN_MUTEX knownAllocationsLock;
+    PIN_MUTEX referencesLock;
 };
 
 #endif // MANAGER_H

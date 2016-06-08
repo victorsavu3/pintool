@@ -53,14 +53,11 @@ enum class AllocEntryType : UINT32
 {
     malloc = 1,
     calloc,
-    realloc,
-    unknown
+    realloc
 };
 
 struct AllocEnterBufferEntry
 {
-    AllocEnterBufferEntry() : type(AllocEntryType::unknown) {}
-
     AllocEntryType type;
     UINT64 tsc;
     THREADID thread;

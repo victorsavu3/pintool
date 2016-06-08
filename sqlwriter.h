@@ -34,6 +34,7 @@ public:
     void insertInstructionTagInstance(InstructionTagInstance&);
     void insertAccess(Access&);
     void insertReference(Reference&);
+    void insertConflict(Conflict&);
 
     void insertTagHit(UINT64 tsc, int tagId, int thread);
 
@@ -65,6 +66,7 @@ private:
     std::shared_ptr<SQLite::Statement> insertInstructionTagInstanceStmt;
     std::shared_ptr<SQLite::Statement> insertAccessStmt;
     std::shared_ptr<SQLite::Statement> insertReferenceStmt;
+    std::shared_ptr<SQLite::Statement> insertConflictStmt;
 
     std::shared_ptr<SQLite::Statement> insertTagHitStmt;
 

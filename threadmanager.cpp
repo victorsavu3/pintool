@@ -114,7 +114,7 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId, ADDRINT address)
     lastTagHitId = tagInstructionId;
     lastHitAddress = address;
 
-    manager->writer.insertTagHit(tsc, tagInstructionId, self.id);
+    // manager->writer.insertTagHit(tsc, tagInstructionId, self.id);
 
     TagInstruction& tagInstruction = manager->tagInstructionIdMap[tagInstructionId];
     Tag& tag = manager->tagIdTagMap[tagInstruction.tag];
@@ -132,8 +132,11 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId, ADDRINT address)
     case TagType::Section:
         handleSectionTag(tsc, tag, tagInstruction, tagInstance);
         break;
-    case TagType::Task:
-        handleTaskTag(tsc, tag, tagInstruction, tagInstance);
+    case TagType::SectionTask:
+        handleSectionTaskTag(tsc, tag, tagInstruction, tagInstance);
+        break;
+    case TagType::PipelineTask:
+        handlePipelineTaskTag(tsc, tag, tagInstruction, tagInstance);
         break;
     case TagType::IgnoreAll:
         handleIgnoreAllTag(tagInstruction);
@@ -251,13 +254,17 @@ void ThreadManager::handleLocation(const LocationDetails& location)
 
 void ThreadManager::handleFree(ADDRINT address)
 {
-    auto it = references.find(address);
+    manager->lockReferences();
+    auto it = manager->references.find(address);
 
-    if (it == references.end())
+    if (it == manager->references.end()) {
+        manager->unlockReferences();
         return;
+    }
 
-    if(it->second.accesses.empty()) {
-        references.erase(address);
+    if(!it->second.wasAccessed) {
+        manager->references.erase(address);
+        manager->unlockReferences();
         return;
     }
 
@@ -279,7 +286,9 @@ void ThreadManager::handleFree(ADDRINT address)
 
     manager->writer.insertReference(it->second.ref);
 
-    references.erase(address);
+    manager->references.erase(it);
+
+    manager->unlockReferences();
 }
 
 void ThreadManager::handleAfterAlloc()
@@ -291,8 +300,7 @@ void ThreadManager::handleAfterAlloc()
     auto it = manager->knownAllocations.find(alloc);
 
     if (it == manager->knownAllocations.end() || it->second.empty()) {
-        manager->unlockKnownAllocations();
-        return;
+        CorruptedBufferException("Allocation return value not found");
     }
 
     auto next = it->second.lower_bound(alloc.tsc);
@@ -373,7 +381,9 @@ void ThreadManager::handleMalloc(ADDRINT address, UINT64 size)
     // if (references.find(address) != references.end())
     //     CorruptedBufferException("Address reused by allocation");
 
-    references.insert(std::make_pair(address, data));
+    manager->lockReferences();
+    manager->references.insert(std::make_pair(address, data));
+    manager->unlockReferences();
 }
 
 void ThreadManager::handleCalloc(ADDRINT address, UINT64 num, UINT64 size)
@@ -389,39 +399,47 @@ void ThreadManager::handleRealloc(ADDRINT address, ADDRINT old, UINT64 size)
 
 void ThreadManager::clearStackReferences(ADDRINT rbp)
 {
-    auto it = references.lower_bound(rbp);
+    manager->lockReferences();
 
-    if (it == references.end())
+    auto it = manager->references.lower_bound(rbp);
+
+    if (it == manager->references.end()) {
+        manager->unlockReferences();
         return;
+    }
 
     auto itEnd = it;
-    auto itStart = references.end();
+    auto itStart = manager->references.end();
 
-    while (it != references.end() && it->second.ref.type == ReferenceType::Stack) {
+    while (it != manager->references.end() && it->second.ref.type == ReferenceType::Stack) {
         itStart = it;
         it--;
     }
 
-    if (itStart == references.end())
+    if (itStart == manager->references.end()) {
+        manager->unlockReferences();
         return;
+    }
 
-    references.erase(itStart, itEnd);
+    manager->references.erase(itStart, itEnd);
+
+    manager->unlockReferences();
 }
 
-ThreadManager::ReferenceData& ThreadManager::getReference(ADDRINT address, int size)
+ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
 {
     {
-        auto it = references.find(address);
+        auto it = manager->references.find(address);
 
-        if (it != references.end()) {
+        if (it != manager->references.end()) {
             return it->second;
         }
     }
 
     {
-        auto it = references.lower_bound(address);
+        auto it = manager->references.lower_bound(address);
 
-        if (it != references.end() && --it != references.end()) {
+        if (it != manager->references.end() && --it != manager->references.end()) {
             if (address < it->first + it->second.ref.size) {
                 return it->second;
             }
@@ -444,7 +462,7 @@ ThreadManager::ReferenceData& ThreadManager::getReference(ADDRINT address, int s
 
             manager->writer.insertReference(data.ref);
 
-            return references.insert(std::make_pair(address, data)).first->second;
+            return manager->references.insert(std::make_pair(address, data)).first->second;
         }
     }
 
@@ -460,7 +478,7 @@ ThreadManager::ReferenceData& ThreadManager::getReference(ADDRINT address, int s
 
     manager->writer.insertReference(data.ref);
 
-    return references.insert(std::make_pair(address, data)).first->second;
+    return manager->references.insert(std::make_pair(address, data)).first->second;
 }
 
 void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
@@ -480,9 +498,19 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
 
     for (int i=0;i < details->accesses.size(); i++) {
         Access a;
-        ReferenceData& data = getReference(addresses[i], details->accesses[i].size);
+        int refid;
+        {
+            manager->lockReferences();
 
-        a.reference = data.ref.id;
+            ReferenceData& data = getReference(addresses[i], details->accesses[i].size);
+            data.wasAccessed = true;
+
+            refid = data.ref.id;
+
+            manager->unlockReferences();
+        }
+
+        a.reference = refid;
         a.instruction = instr.id;
         a.position = i;
         a.address = addresses[i];
@@ -495,7 +523,9 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
 
         manager->writer.insertAccess(a);
 
-        data.accesses.push_back(a);
+        for (auto& it: currentTagInstances) {
+            recordTagAccess(it, a.address, a.reference, a.id);
+        }
     }
 }
 
@@ -597,13 +627,16 @@ void ThreadManager::handleSectionTag(UINT64 tsc, const Tag &tag, const TagInstru
             CorruptedBufferException("Stopping an unstarted tag");
         }
 
-        endCurrentTaskTag(tsc);
+        endCurrentSectionTaskTag(tsc);
 
         tagInstance->end = tsc;
 
         manager->writer.insertTagInstance(*tagInstance);
 
         currentTagInstances.erase(tagInstance);
+
+        closeTagInstanceAccesses(containerTagInstanceChildren[tagInstance->id]);
+        containerTagInstanceChildren.erase(tagInstance->id);
 
         interestingProgramPart = false;
     }
@@ -646,7 +679,7 @@ void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstr
             CorruptedBufferException("Stopping an unstarted tag");
         }
 
-        endCurrentTaskTag(tsc);
+        endCurrentPipelineTaskTag(tsc);
 
         tagInstance->end = tsc;
 
@@ -663,7 +696,7 @@ void ThreadManager::handlePipelineTag(UINT64 tsc, const Tag &tag, const TagInstr
     }
 }
 
-void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &tagInstance)
+void ThreadManager::handleSectionTaskTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &tagInstance)
 {
     switch (tagInstruction.type)
     {
@@ -682,11 +715,11 @@ void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstructi
         {
             const Tag& tag = manager->tagIdTagMap[instance.tag];
 
-            return tag.type == TagType::Pipeline || tag.type == TagType::Section;
+            return tag.type == TagType::Section;
         });
 
         if (container == currentTagInstances.end())
-            CorruptedBufferException("Found Task outside Pipeline or Section");
+            CorruptedBufferException("Found Task outside Section");
 
         TagInstance ti;
         ti.genId();
@@ -696,6 +729,9 @@ void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstructi
         ti.thread = self.id;
 
         currentTagInstances.push_front(ti);
+        tagInstanceType[ti.id] = tag.type;
+
+        containerTagInstanceChildren[container->id].insert(ti.id);
 
         interestingProgramPart = true;
 
@@ -709,11 +745,15 @@ void ThreadManager::handleTaskTag(UINT64 tsc, const Tag &tag, const TagInstructi
     }
 }
 
-void ThreadManager::endCurrentTaskTag(UINT64 tsc)
+void ThreadManager::handlePipelineTaskTag(UINT64 tsc, const Tag &tag, const TagInstruction &tagInstruction, std::list<TagInstance>::iterator &tagInstance)
+{
+}
+
+void ThreadManager::endCurrentSectionTaskTag(UINT64 tsc)
 {
     auto tagInstance = std::find_if(currentTagInstances.begin(), currentTagInstances.end(), [&] (const TagInstance& instance)
     {
-        return manager->tagIdTagMap[instance.tag].type == TagType::Task;
+        return manager->tagIdTagMap[instance.tag].type == TagType::SectionTask;
     } );
 
     if (tagInstance != currentTagInstances.end())
@@ -723,7 +763,12 @@ void ThreadManager::endCurrentTaskTag(UINT64 tsc)
         manager->writer.insertTagInstance(*tagInstance);
 
         currentTagInstances.erase(tagInstance);
+        tagInstanceType.erase(tagInstance->id);
     }
+}
+
+void ThreadManager::endCurrentPipelineTaskTag(UINT64 tsc)
+{
 }
 
 void ThreadManager::handleIgnoreAllTag(const TagInstruction &tagInstruction)
@@ -866,6 +911,49 @@ void ThreadManager::handleIgnoreAccessesTag(const TagInstruction &tagInstruction
     }
 
     updateChecks();
+}
+
+void ThreadManager::recordTagAccess(TagInstance &instance, ADDRINT address, int reference, int access)
+{
+    TagType type = tagInstanceType[instance.id];
+
+    if(type != TagType::PipelineTask && type != TagType::SectionTask)
+        return;
+
+    auto it = tagAccessingReference.find(reference);
+
+    tagAccessingReference[reference][address].insert(instance.id);
+
+    if (it == tagAccessingReference.end())
+        // First access of reference
+        return;
+
+    auto it2 = it->second.find(address);
+
+    if (it2->second.size() == 1)
+        // Only this tags accesses at address
+        return;
+
+    for(auto it3 : it2->second) {
+        if (it3 != instance.id) {
+             Conflict c;
+
+             c.reference = reference;
+             c.tagInstance1 = instance.id;
+             c.tagInstance2 = it3;
+
+             manager->writer.insertConflict(c);
+        }
+    }
+}
+
+void ThreadManager::closeTagInstanceAccesses(const std::set<int> &tagInstances)
+{
+    for(auto& it1: tagAccessingReference) {
+        for(auto& it2: it1.second) {
+            it2.second.erase(tagInstances.begin(), tagInstances.end());
+        }
+    }
 }
 
 void ThreadManager::updateChecks()

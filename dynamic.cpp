@@ -91,8 +91,18 @@ VOID AllocExit(ADDRINT d, ADDRINT ref, THREADID tid)
         manager->unlockKnownAllocations();
         return;
     }
+    auto knownIt = manager->knownAllocations.find(it->second);
 
-    manager->knownAllocations[it->second].insert(std::make_pair(it->second.tsc, ref));
+    if (knownIt == manager->knownAllocations.end()) {
+        std::map<UINT64, ADDRINT> map;
+
+        map.insert(std::make_pair(it->second.tsc, ref));
+
+        manager->knownAllocations.insert(std::make_pair(it->second, map));
+    } else {
+        knownIt->second.insert(std::make_pair(it->second.tsc, ref));
+    }
+
     manager->knownAllocationsInProgess.erase(it);
 
     manager->unlockKnownAllocations();

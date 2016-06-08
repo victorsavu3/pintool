@@ -65,7 +65,9 @@ enum class TagType
     ProcessAll = 7,
     ProcessCalls = 8,
     ProcessAccesses = 9,
-    Task = 10
+    SectionTask = 10,
+    PipelineTask = 11,
+    PipelineSegment = 12
 };
 
 class Tag
@@ -205,6 +207,14 @@ public:
     ReferenceType type;
     int allocator;
     int deallocator;
+};
+
+struct Conflict {
+    int id;
+
+    int reference;
+    int tagInstance1;
+    int tagInstance2;
 };
 
 namespace std
