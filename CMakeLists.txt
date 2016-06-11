@@ -87,18 +87,30 @@ add_custom_command(
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set_source_files_properties(sqlwriter.cpp PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/create.sql.h;${CMAKE_CURRENT_BINARY_DIR}/writePragmas.sql.h;${CMAKE_CURRENT_BINARY_DIR}/clear.sql.h")
 
-set(SRC_LIST_COMMON sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c sql/create.sql sql/writePragmas.sql clear.sql)
+set(SRC_LIST_COMMON entities sqlwriter sqlite filter exception ${CMAKE_CURRENT_BINARY_DIR}/sqlite/sqlite3.c sql/create.sql sql/writePragmas.sql clear.sql)
 set(SRC_LIST_STATIC static ${SRC_LIST_COMMON})
-set(SRC_LIST_DYNAMIC asm.h buffer dynamic manager entities threadmanager ${SRC_LIST_COMMON})
+set(SRC_LIST_DYNAMIC asm.h buffer dynamic manager threadmanager ${SRC_LIST_COMMON})
+set(SRC_LIST_SQLTEST sqltest ${SRC_LIST_COMMON})
+
 
 add_library(${PROJECT_NAME}_static SHARED ${SRC_LIST_STATIC})
 add_library(${PROJECT_NAME}_dynamic SHARED ${SRC_LIST_DYNAMIC})
+add_library(${PROJECT_NAME}_sqltest SHARED ${SRC_LIST_SQLTEST})
 
 add_definitions(-DTARGET_IA32E -DHOST_IA32E -DTARGET_LINUX)
-set(CMAKE_CXX_FLAGS "-g -fPIC -Wl,-Bsymbolic -std=c++11")
+set(CMAKE_CXX_FLAGS "-fPIC -Wl,-Bsymbolic -std=c++11")
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")
+
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O2")
 
 add_dependencies(${PROJECT_NAME}_static libsqlite)
 target_link_libraries(${PROJECT_NAME}_static "pin" "pindwarf" "pinvm" "z" "yaml-cpp" "dl" "rt")
+
+add_dependencies(${PROJECT_NAME}_static libsqlite)
+target_link_libraries(${PROJECT_NAME}_sqltest "pin" "pindwarf" "pinvm" "z" "yaml-cpp" "dl" "rt")
 
 add_dependencies(${PROJECT_NAME}_dynamic libsqlite)
 target_link_libraries(${PROJECT_NAME}_dynamic "pin" "pindwarf" "pinvm" "z" "yaml-cpp" "dl" "rt")
