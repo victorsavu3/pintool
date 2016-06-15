@@ -300,7 +300,9 @@ void ThreadManager::handleAfterAlloc()
     auto it = manager->knownAllocations.find(alloc);
 
     if (it == manager->knownAllocations.end() || it->second.empty()) {
-        CorruptedBufferException("Allocation return value not found");
+        //CorruptedBufferException("Allocation return value not found");
+        manager->unlockKnownAllocations();
+        return;
     }
 
     auto next = it->second.lower_bound(alloc.tsc);
@@ -524,7 +526,7 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
         manager->writer.insertAccess(a);
 
         for (auto& it: currentTagInstances) {
-            recordTagAccess(it, a.address, a.reference, a.id);
+            recordTagAccess(it, a.address, a.reference, a.id, a.type);
         }
     }
 }
@@ -913,7 +915,7 @@ void ThreadManager::handleIgnoreAccessesTag(const TagInstruction &tagInstruction
     updateChecks();
 }
 
-void ThreadManager::recordTagAccess(TagInstance &instance, ADDRINT address, int reference, int access)
+void ThreadManager::recordTagAccess(TagInstance &instance, ADDRINT address, int reference, int access, AccessType accessType)
 {
     TagType type = tagInstanceType[instance.id];
 
@@ -922,7 +924,8 @@ void ThreadManager::recordTagAccess(TagInstance &instance, ADDRINT address, int 
 
     auto it = tagAccessingReference.find(reference);
 
-    tagAccessingReference[reference][address].insert(instance.id);
+    if (accessType == AccessType::Write || tagAccessingReference[reference][address].find(instance.id) == tagAccessingReference[reference][address].end())
+        tagAccessingReference[reference][address].insert(std::make_pair(instance.id, std::make_pair(access, accessType)));
 
     if (it == tagAccessingReference.end())
         // First access of reference
@@ -935,12 +938,13 @@ void ThreadManager::recordTagAccess(TagInstance &instance, ADDRINT address, int 
         return;
 
     for(auto it3 : it2->second) {
-        if (it3 != instance.id) {
+        if (it3.first != instance.id && (accessType == AccessType::Write || it3.second.second == AccessType::Write)) {
              Conflict c;
 
-             c.reference = reference;
              c.tagInstance1 = instance.id;
-             c.tagInstance2 = it3;
+             c.tagInstance2 = it3.first;
+             c.access2 = it3.second.first;
+             c.access1 = access;
 
              manager->writer.insertConflict(c);
         }
@@ -951,7 +955,9 @@ void ThreadManager::closeTagInstanceAccesses(const std::set<int> &tagInstances)
 {
     for(auto& it1: tagAccessingReference) {
         for(auto& it2: it1.second) {
-            it2.second.erase(tagInstances.begin(), tagInstances.end());
+            for(auto& it3: tagInstances) {
+                it2.second.erase(it3);
+            }
         }
     }
 }

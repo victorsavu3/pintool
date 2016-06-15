@@ -69,18 +69,18 @@ struct AllocEnterBufferEntry
 
 inline bool operator==(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
 {
-    if (lhs.type == rhs.type)
-        return true;
+    if (lhs.type != rhs.type)
+        return false;
 
     switch(lhs.type) {
-    case AllocEntryType::malloc:
-        return std::tie(lhs.size, lhs.thread) == std::tie(rhs.size, rhs.thread);
-    case AllocEntryType::calloc:
-        return std::tie(lhs.size, rhs.num, lhs.thread) == std::tie(rhs.size, rhs.num, rhs.thread);
-    case AllocEntryType::realloc:
-        return std::tie(lhs.size, lhs.ref, lhs.thread) == std::tie(rhs.size, rhs.ref, rhs.thread);
-    default:
-        CorruptedBufferException("Invalid AllocEntryType");
+        case AllocEntryType::malloc:
+            return std::tie(lhs.size, lhs.thread) == std::tie(rhs.size, rhs.thread);
+        case AllocEntryType::calloc:
+            return std::tie(lhs.size, rhs.num, lhs.thread) == std::tie(rhs.size, rhs.num, rhs.thread);
+        case AllocEntryType::realloc:
+            return std::tie(lhs.size, lhs.ref, lhs.thread) == std::tie(rhs.size, rhs.ref, rhs.thread);
+        default:
+            CorruptedBufferException("Invalid AllocEntryType");
     }
 }
 
@@ -91,8 +91,8 @@ inline bool operator!=(const AllocEnterBufferEntry & lhs, const AllocEnterBuffer
 
 inline bool operator<(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
 {
-    if (lhs.type < rhs.type)
-        return true;
+    if (lhs.type >= rhs.type)
+        return false;
 
     switch(lhs.type) {
     case AllocEntryType::malloc:

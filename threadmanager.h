@@ -84,8 +84,8 @@ private:
 
     /* Dependency analysis */
 
-    std::map<int, std::map<ADDRINT, std::set<int> >> tagAccessingReference;
-    void recordTagAccess(TagInstance& instance, ADDRINT address, int reference, int access);
+    std::map<int, std::map<ADDRINT, std::map<int, std::pair<int, AccessType> >>> tagAccessingReference;
+    void recordTagAccess(TagInstance& instance, ADDRINT address, int reference, int access, AccessType accessType);
     void closeTagInstanceAccesses(const std::set<int>& tagInstances);
 
 

@@ -212,9 +212,10 @@ public:
 struct Conflict {
     int id;
 
-    int reference;
     int tagInstance1;
     int tagInstance2;
+    int access1;
+    int access2;
 };
 
 namespace std
