@@ -63,6 +63,7 @@ private:
     std::map<int, TagType> tagInstanceType;
     std::list<TagInstance>::iterator findCurrentTagInstance(int tagId);
     std::map<int, std::set<int> > containerTagInstanceChildren;
+    std::map<int, int> childInstanceParent;
 
     void insertCurrentTagInstances(int instruction);
 

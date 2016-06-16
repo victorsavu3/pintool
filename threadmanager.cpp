@@ -719,6 +719,7 @@ void ThreadManager::handleSectionTaskTag(UINT64 tsc, const Tag &tag, const TagIn
             tagInstance->end = tsc;
 
             manager->writer.insertTagInstance(*tagInstance);
+            childInstanceParent.erase(tagInstance->id);
 
             currentTagInstances.erase(tagInstance);
         }
@@ -744,6 +745,7 @@ void ThreadManager::handleSectionTaskTag(UINT64 tsc, const Tag &tag, const TagIn
         tagInstanceType[ti.id] = tag.type;
 
         containerTagInstanceChildren[container->id].insert(ti.id);
+        childInstanceParent.insert(std::make_pair(ti.id, container->id));
 
         interestingProgramPart = true;
 
@@ -776,6 +778,7 @@ void ThreadManager::endCurrentSectionTaskTag(UINT64 tsc)
 
         currentTagInstances.erase(tagInstance);
         tagInstanceType.erase(tagInstance->id);
+        childInstanceParent.erase(tagInstance->id);
     }
 }
 
@@ -947,8 +950,10 @@ void ThreadManager::recordTagAccess(TagInstance &instance, ADDRINT address, int 
         // Only this tags accesses at address
         return;
 
+    int parent = childInstanceParent[instance.id];
+
     for(auto it3 : it2->second) {
-        if (it3.first != instance.id && (accessType == AccessType::Write || it3.second.second == AccessType::Write)) {
+        if (it3.first != instance.id && (accessType == AccessType::Write || it3.second.second == AccessType::Write) && it3.first != parent) {
              Conflict c;
 
              c.tagInstance1 = instance.id;
