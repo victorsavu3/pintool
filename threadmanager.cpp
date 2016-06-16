@@ -53,6 +53,8 @@ void ThreadManager::threadStopped()
         oss << "Closing " << callStack.back().call.function << " a end of thread";
         Warn("threadStopped", oss.str());
 
+        insertCallTagInstance(callStack.back());
+
         Call c = callStack.back().call;
         callStack.pop_back();
 
@@ -211,6 +213,12 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp)
     manager->writer.insertSegment(s);
 
     callStack.push_back({c, s.id, rbp});
+
+    std::set<int>& callTagInstances = callStack.back().tagInstances;
+
+    for (auto& it : currentTagInstances) {
+        callTagInstances.insert(it.id);
+    }
 }
 
 void ThreadManager::handleRet(UINT64 tsc, int functionId)
@@ -229,6 +237,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
         Warn("handleRet", oss.str());
 
         clearStackReferences(callStack.back().rbp);
+        insertCallTagInstance(callStack.back());
 
         callStack.pop_back();
         c = callStack.back().call;
@@ -238,6 +247,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
         CorruptedBufferException("Could not find call in callstack");
 
     clearStackReferences(callStack.back().rbp);
+    insertCallTagInstance(callStack.back());
 
     callStack.pop_back();
 
@@ -958,6 +968,20 @@ void ThreadManager::closeTagInstanceAccesses(const std::set<int> &tagInstances)
             for(auto& it3: tagInstances) {
                 it2.second.erase(it3);
             }
+        }
+    }
+}
+
+void ThreadManager::insertCallTagInstance(const ThreadManager::CallData &data)
+{
+    for (auto& instance : currentTagInstances) {
+        if (data.tagInstances.find(instance.id) != data.tagInstances.end()) {
+            CallTagInstance callTagInstance;
+
+            callTagInstance.call = data.call.id;
+            callTagInstance.tagInstance = instance.id;
+
+            manager->writer.insertCallTagInstance(callTagInstance);
         }
     }
 }

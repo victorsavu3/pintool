@@ -170,6 +170,14 @@ public:
     int tagInstance;
 };
 
+class CallTagInstance {
+public:
+    int id;
+
+    int call;
+    int tagInstance;
+};
+
 enum class AccessType
 {
     Read = 1,

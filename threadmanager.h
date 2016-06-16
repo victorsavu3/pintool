@@ -49,6 +49,7 @@ private:
           Call call;
           int segment;
           UINT64 rbp;
+          std::set<int> tagInstances;
     };
 
     std::list<CallData> callStack;
@@ -87,6 +88,7 @@ private:
     std::map<int, std::map<ADDRINT, std::map<int, std::pair<int, AccessType> >>> tagAccessingReference;
     void recordTagAccess(TagInstance& instance, ADDRINT address, int reference, int access, AccessType accessType);
     void closeTagInstanceAccesses(const std::set<int>& tagInstances);
+    void insertCallTagInstance(const CallData& data);
 
 
     /* Ignore checks */
