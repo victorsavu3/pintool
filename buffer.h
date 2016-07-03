@@ -14,7 +14,8 @@ enum class BuferEntryType : UINT32
     Tag,
     MemRef,
     AllocEnter,
-    Free
+    Free,
+    RSPChange
 };
 
 struct CallInstructionBufferEntry
@@ -111,9 +112,13 @@ struct FreeBufferEntry
     ADDRINT ref;
 };
 
+struct RSPChangeEntry
+{
+    ADDRINT val;
+};
+
 union BufferEntryUnion
 {
-    BuferEntryType type;
     CallInstructionBufferEntry callInstruction;
     CallEnterBufferEntry callEnter;
     RetBufferEntry ret;
@@ -121,6 +126,7 @@ union BufferEntryUnion
     AccessInstructionBufferEntry memref;
     AllocEnterBufferEntry allocenter;
     FreeBufferEntry free;
+    RSPChangeEntry rspChange;
 };
 
 struct BufferEntry

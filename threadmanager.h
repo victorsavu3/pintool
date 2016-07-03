@@ -33,6 +33,7 @@ private:
     void handleCall(UINT64 tsc, int location);
     void handleRet(UINT64 tsc, int functionId);
     void handleLocation(const LocationDetails &location);
+    void handleRSPChange(UINT64 val);
 
     void handleFree(ADDRINT address);
     void handleAfterAlloc();
@@ -40,7 +41,7 @@ private:
     void handleMalloc(ADDRINT address, UINT64 size);
     void handleCalloc(ADDRINT address, UINT64 num, UINT64 size);
     void handleRealloc(ADDRINT address, ADDRINT old, UINT64 size);
-    void clearStackReferences(ADDRINT rbp);
+    void clearStackReferences(ADDRINT from, ADDRINT rsp);
 
     bool inAlloc;
     AllocEnterBufferEntry alloc;
@@ -49,6 +50,7 @@ private:
           Call call;
           int segment;
           UINT64 rbp;
+          UINT64 rsp;
           std::set<int> tagInstances;
     };
 

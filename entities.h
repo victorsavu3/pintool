@@ -203,7 +203,9 @@ enum class ReferenceType {
     Heap = 2,
     Static = 3,
     Global = 4,
-    Unknown = 5
+    Parameter = 5,
+    RedZone = 6,
+    Unknown = 7
   };
 
 class Reference {

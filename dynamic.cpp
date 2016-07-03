@@ -302,6 +302,11 @@ VOID ImageLoad(IMG img, VOID *v)
 
                         manager->callInstructionAddressesToInstrument.insert(std::make_pair(address, detail));
                     }
+
+                    if (INS_RegW(ins, REG_RSP))
+                    {
+                        manager->rspChangeAddressesToInstrument.insert(address);
+                    }
                 }
 
                 RTN_Close(rtn);
@@ -379,6 +384,18 @@ VOID Trace(TRACE trace, VOID *v)
                     }
 
                     continue;
+                }
+            }
+
+            {
+                auto it = manager->rspChangeAddressesToInstrument.find(address);
+
+                if (it != manager->rspChangeAddressesToInstrument.end())
+                {
+                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
+                                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::RSPChange), offsetof(struct BufferEntry, type),
+                                         IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct RSPChangeEntry, val),
+                                         IARG_END);
                 }
             }
 

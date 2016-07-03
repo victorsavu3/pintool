@@ -101,6 +101,9 @@ void ThreadManager::handleEntry(BufferEntry * entry)
     case BuferEntryType::Free:
         handleFree(entry->data.free.ref);
         break;
+    case BuferEntryType::RSPChange:
+        handleRSPChange(entry->data.rspChange.val);
+        break;
     default:
         CorruptedBufferException("Invalid entry type");
     }
@@ -212,7 +215,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp)
     s.type = SegmentType::Standard;
     manager->writer.insertSegment(s);
 
-    callStack.push_back({c, s.id, rbp});
+    callStack.push_back({c, s.id, rbp, rbp});
 
     std::set<int>& callTagInstances = callStack.back().tagInstances;
 
@@ -236,7 +239,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
 
         Warn("handleRet", oss.str());
 
-        clearStackReferences(callStack.back().rbp);
+        clearStackReferences(callStack.back().rbp, callStack.back().rsp);
         insertCallTagInstance(callStack.back());
 
         callStack.pop_back();
@@ -246,7 +249,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     if (callStack.empty())
         CorruptedBufferException("Could not find call in callstack");
 
-    clearStackReferences(callStack.back().rbp);
+    clearStackReferences(callStack.back().rbp, callStack.back().rsp);
     insertCallTagInstance(callStack.back());
 
     callStack.pop_back();
@@ -260,6 +263,18 @@ void ThreadManager::handleLocation(const LocationDetails& location)
 {
     if (callStack.empty())
         return;
+}
+
+void ThreadManager::handleRSPChange(UINT64 val)
+{
+    if (callStack.empty())
+        return;
+
+    if (val < callStack.back().rsp) { // stack shrink
+        clearStackReferences(val, callStack.back().rsp);
+    }
+
+    callStack.back().rsp = val;
 }
 
 void ThreadManager::handleFree(ADDRINT address)
@@ -409,11 +424,11 @@ void ThreadManager::handleRealloc(ADDRINT address, ADDRINT old, UINT64 size)
     handleMalloc(address, size);
 }
 
-void ThreadManager::clearStackReferences(ADDRINT rbp)
+void ThreadManager::clearStackReferences(ADDRINT from, ADDRINT rsp)
 {
     manager->lockReferences();
 
-    auto it = manager->references.lower_bound(rbp);
+    auto it = manager->references.lower_bound(from);
 
     if (it == manager->references.end()) {
         manager->unlockReferences();
@@ -423,7 +438,10 @@ void ThreadManager::clearStackReferences(ADDRINT rbp)
     auto itEnd = it;
     auto itStart = manager->references.end();
 
-    while (it != manager->references.end() && it->second.ref.type == ReferenceType::Stack) {
+    while (it != manager->references.end() && it->first <= rsp) {
+        if (it->second.ref.type != ReferenceType::Stack && it->second.ref.type != ReferenceType::Parameter)
+            break;
+
         itStart = it;
         it--;
     }
@@ -460,8 +478,9 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
 
     if (!callStack.empty()) {
         ADDRINT rbp = callStack.back().rbp;
+        ADDRINT rsp = callStack.back().rsp;
 
-        if (address <= rbp && address > rbp - 1000000) { // TODO find real stack end using DWARF
+        if (address > rbp && address <= rsp) { // Most common case, stack variable for the last function
             ReferenceData data;
             data.ref.size = size;
             data.ref.type = ReferenceType::Stack;
@@ -469,12 +488,46 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
             data.ref.deallocator = -1;
 
             std::stringstream stream;
-            stream << "S: " << std::hex << (ADDRDELTA)rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)rbp);
+            stream << "S: " << std::hex << (ADDRDELTA)rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)rbp) << ':' << callStack.back().call.function;
             data.ref.name = stream.str();
 
             manager->writer.insertReference(data.ref);
 
             return manager->references.insert(std::make_pair(address, data)).first->second;
+        } else if (address > rsp && address <= rsp - 128) { // Red Zone is only valid for the last function in the stack
+            return manager->redZone;
+        } else if (address > callStack.front().rbp && address <= rsp + 128){ // We are in the stack
+            for (auto it = callStack.rbegin(); it != callStack.rend(); it++) {
+                if (address > it->rbp && address <= it->rsp) { // Stack variables between rbp and rsp of a parent
+                    ReferenceData data;
+                    data.ref.size = size;
+                    data.ref.type = ReferenceType::Stack;
+                    data.ref.allocator = -1;
+                    data.ref.deallocator = -1;
+
+                    std::stringstream stream;
+                    stream << "S: " << std::hex << (ADDRDELTA)it->rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp) << ':' << it->call.function;
+                    data.ref.name = stream.str();
+
+                    manager->writer.insertReference(data.ref);
+
+                    return manager->references.insert(std::make_pair(address, data)).first->second;
+                } else if (address <= it->rbp && address <= it->rsp) { // Arguments above rbp
+                    ReferenceData data;
+                    data.ref.size = size;
+                    data.ref.type = ReferenceType::Parameter;
+                    data.ref.allocator = -1;
+                    data.ref.deallocator = -1;
+
+                    std::stringstream stream;
+                    stream << "P: " << std::hex << (ADDRDELTA)it->rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp) << ':' << it->call.function;
+                    data.ref.name = stream.str();
+
+                    manager->writer.insertReference(data.ref);
+
+                    return manager->references.insert(std::make_pair(address, data)).first->second;
+                }
+            }
         }
     }
 

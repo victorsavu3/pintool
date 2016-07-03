@@ -18,6 +18,8 @@ Manager::Manager(const string &db, const string &source, const string &filter) :
     loadTagInstructionIdMap();
     loadSourceLocationTagIdMap();
     loadTagIdTagMap();
+
+    writeRedZone();
 }
 
 int Manager::getLocation(ADDRINT address, int functionId)
@@ -273,6 +275,17 @@ void Manager::loadTagInstructionIdMap()
     {
         tagInstructionIdMap.insert(std::make_pair(tagInstruction.id, tagInstruction));
     }
+}
+
+void Manager::writeRedZone()
+{
+    redZone.ref.allocator = -1;
+    redZone.ref.deallocator = -1;
+    redZone.ref.type = ReferenceType::RedZone;
+    redZone.ref.name = "Red Zone";
+    redZone.ref.size = 128;
+
+    writer.insertReference(redZone.ref);
 }
 
 void Manager::lock()
