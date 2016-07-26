@@ -79,30 +79,27 @@ void ThreadManager::handleEntry(BufferEntry * entry)
         if (processCallsComputed)
             handleLocation(manager->locationDetails[entry->data.callInstruction.location]);
         if (processCallsComputed)
-            handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location);
+            handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location, entry->data.callInstruction.rsp);
         break;
     case BuferEntryType::CallEnter:
         if (processCallsComputed)
-            handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId, entry->data.callEnter.rbp);
+            handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId, entry->data.callEnter.rbp, entry->data.callEnter.rsp);
         break;
     case BuferEntryType::Ret:
         if (processCallsComputed)
-            handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId);
+            handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId, entry->data.ret.rsp);
         break;
     case BuferEntryType::MemRef:
         if (processCallsComputed)
             handleLocation(manager->locationDetails[((AccessInstructionDetails*)entry->data.memref.accessDetails)->location]);
         if (processAccessesComputed)
-            handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses);
+            handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses, entry->data.memref.rsp);
         break;
     case BuferEntryType::AllocEnter:
         handleAllocEnter(entry->data.allocenter);
         break;
     case BuferEntryType::Free:
         handleFree(entry->data.free.ref);
-        break;
-    case BuferEntryType::RSPChange:
-        handleRSPChange(entry->data.rspChange.val);
         break;
     default:
         CorruptedBufferException("Invalid entry type");
@@ -174,16 +171,24 @@ void ThreadManager::handleTag(UINT64 tsc, int tagInstructionId, ADDRINT address)
     }
 }
 
-void ThreadManager::handleCall(UINT64 tsc, int location)
+void ThreadManager::handleCall(UINT64 tsc, int location, UINT64 rsp)
 {
+    callStack.back().rsp = rsp;
+
     lastCallTSC = tsc;
     lastCallLocation = location;
 }
 
-void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp)
+void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp, UINT64 rsp)
 {
     Call c;
     c.genId();
+
+    if (rbp < rsp)
+    {
+        // Make a good guess
+        rbp = rsp;
+    }
 
     if(callStack.empty())
     {
@@ -215,7 +220,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp)
     s.type = SegmentType::Standard;
     manager->writer.insertSegment(s);
 
-    callStack.push_back({c, s.id, rbp, rbp});
+    callStack.push_back({c, s.id, rbp, rsp});
 
     std::set<int>& callTagInstances = callStack.back().tagInstances;
 
@@ -224,7 +229,7 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp)
     }
 }
 
-void ThreadManager::handleRet(UINT64 tsc, int functionId)
+void ThreadManager::handleRet(UINT64 tsc, int functionId, UINT64 rsp)
 {
     if (callStack.empty())
         CorruptedBufferException("Return from empty callstack");
@@ -239,7 +244,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
 
         Warn("handleRet", oss.str());
 
-        clearStackReferences(callStack.back().rbp, callStack.back().rsp);
+        clearStackReferences(callStack.back().rbp, rsp);
         insertCallTagInstance(callStack.back());
 
         callStack.pop_back();
@@ -249,7 +254,7 @@ void ThreadManager::handleRet(UINT64 tsc, int functionId)
     if (callStack.empty())
         CorruptedBufferException("Could not find call in callstack");
 
-    clearStackReferences(callStack.back().rbp, callStack.back().rsp);
+    clearStackReferences(callStack.back().rbp, rsp);
     insertCallTagInstance(callStack.back());
 
     callStack.pop_back();
@@ -263,18 +268,6 @@ void ThreadManager::handleLocation(const LocationDetails& location)
 {
     if (callStack.empty())
         return;
-}
-
-void ThreadManager::handleRSPChange(UINT64 val)
-{
-    if (callStack.empty())
-        return;
-
-    if (val < callStack.back().rsp) { // stack shrink
-        clearStackReferences(val, callStack.back().rsp);
-    }
-
-    callStack.back().rsp = val;
 }
 
 void ThreadManager::handleFree(ADDRINT address)
@@ -456,7 +449,7 @@ void ThreadManager::clearStackReferences(ADDRINT from, ADDRINT rsp)
     manager->unlockReferences();
 }
 
-ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
+ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp)
 {
     {
         auto it = manager->references.find(address);
@@ -478,9 +471,9 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
 
     if (!callStack.empty()) {
         ADDRINT rbp = callStack.back().rbp;
-        ADDRINT rsp = callStack.back().rsp;
+        ADDRINT rsp = rsp;
 
-        if (address > rbp && address <= rsp) { // Most common case, stack variable for the last function
+        if (address < rbp && address >= rsp) { // Most common case, stack variable for the last function
             ReferenceData data;
             data.ref.size = size;
             data.ref.type = ReferenceType::Stack;
@@ -494,9 +487,9 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
             manager->writer.insertReference(data.ref);
 
             return manager->references.insert(std::make_pair(address, data)).first->second;
-        } else if (address > rsp && address <= rsp - 128) { // Red Zone is only valid for the last function in the stack
+        } else if (address < rsp && address >= rsp - 128) { // Red Zone is only valid for the last function in the stack
             return manager->redZone;
-        } else if (address > callStack.front().rbp && address <= rsp + 128){ // We are in the stack
+        } else if (address < callStack.front().rbp && address >= rsp){ // We are in the stack
             for (auto it = callStack.rbegin(); it != callStack.rend(); it++) {
                 if (address > it->rbp && address <= it->rsp) { // Stack variables between rbp and rsp of a parent
                     ReferenceData data;
@@ -546,7 +539,7 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size)
     return manager->references.insert(std::make_pair(address, data)).first->second;
 }
 
-void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7])
+void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7], UINT64 rsp)
 {
     if (callStack.empty())
         return;
@@ -567,7 +560,7 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
         {
             manager->lockReferences();
 
-            ReferenceData& data = getReference(addresses[i], details->accesses[i].size);
+            ReferenceData& data = getReference(addresses[i], details->accesses[i].size, rsp);
             data.wasAccessed = true;
 
             refid = data.ref.id;

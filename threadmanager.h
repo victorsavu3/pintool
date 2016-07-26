@@ -29,11 +29,10 @@ private:
     int lastTagHitId;
     ADDRINT lastHitAddress;
 
-    void handleCallEnter(UINT64 tsc,int functionId, UINT64 rbp);
-    void handleCall(UINT64 tsc, int location);
-    void handleRet(UINT64 tsc, int functionId);
+    void handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp, UINT64 rsp);
+    void handleCall(UINT64 tsc, int location, UINT64 rsp);
+    void handleRet(UINT64 tsc, int functionId, UINT64 rsp);
     void handleLocation(const LocationDetails &location);
-    void handleRSPChange(UINT64 val);
 
     void handleFree(ADDRINT address);
     void handleAfterAlloc();
@@ -58,8 +57,8 @@ private:
     UINT64 lastCallTSC;
     int lastCallLocation;
 
-    ReferenceData& getReference(ADDRINT address, int size);
-    void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7]);
+    ReferenceData& getReference(ADDRINT address, int size, UINT64 rsp);
+    void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7], UINT64 rsp);
 
     std::list<TagInstance> currentTagInstances;
     std::map<int, TagType> tagInstanceType;

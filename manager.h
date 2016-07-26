@@ -69,7 +69,6 @@ public:
     std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
     std::set<ADDRINT> freeEnterAddresesToInstrument;
     std::map<ADDRINT, AllocEntryType> allocEnterAddresesToInstrument;
-    std::set<ADDRINT> rspChangeAddressesToInstrument;
 
     std::map<THREADID, AllocEnterBufferEntry> knownAllocationsInProgess;
     std::map<AllocEnterBufferEntry, std::map<UINT64, ADDRINT> > knownAllocations;

@@ -14,14 +14,14 @@ enum class BuferEntryType : UINT32
     Tag,
     MemRef,
     AllocEnter,
-    Free,
-    RSPChange
+    Free
 };
 
 struct CallInstructionBufferEntry
 {
     UINT32 location;
     UINT64 tsc;
+    UINT64 rsp;
 };
 
 struct CallEnterBufferEntry
@@ -29,12 +29,14 @@ struct CallEnterBufferEntry
     UINT32 functionId;
     UINT64 tsc;
     UINT64 rbp;
+    UINT64 rsp;
 };
 
 struct RetBufferEntry
 {
     UINT32 functionId;
     UINT64 tsc;
+    UINT64 rsp;
 };
 
 struct TagBufferEntry
@@ -48,6 +50,7 @@ struct AccessInstructionBufferEntry
 {
     ADDRINT accessDetails;
     ADDRINT addresses[7];
+    UINT64 rsp;
 };
 
 enum class AllocEntryType : UINT32
@@ -112,11 +115,6 @@ struct FreeBufferEntry
     ADDRINT ref;
 };
 
-struct RSPChangeEntry
-{
-    ADDRINT val;
-};
-
 union BufferEntryUnion
 {
     CallInstructionBufferEntry callInstruction;
@@ -126,7 +124,6 @@ union BufferEntryUnion
     AccessInstructionBufferEntry memref;
     AllocEnterBufferEntry allocenter;
     FreeBufferEntry free;
-    RSPChangeEntry rspChange;
 };
 
 struct BufferEntry
