@@ -34,7 +34,7 @@ public:
     void insertInstructionTagInstance(InstructionTagInstance&);
     void insertCallTagInstance(CallTagInstance&);
     void insertAccess(Access&);
-    void insertReference(Reference&);
+    void insertReference(const Reference&);
     void insertConflict(Conflict&);
 
     void insertTagHit(UINT64 tsc, int tagId, int thread);

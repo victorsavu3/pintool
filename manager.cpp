@@ -35,16 +35,6 @@ int Manager::getLocation(ADDRINT address, int functionId)
     return locationDetails.size() - 1;
 }
 
-void Manager::lockKnownAllocations()
-{
-    PIN_MutexLock(&knownAllocationsLock);
-}
-
-void Manager::unlockKnownAllocations()
-{
-    PIN_MutexUnlock(&knownAllocationsLock);
-}
-
 void Manager::lockReferences()
 {
     PIN_MutexLock(&referencesLock);
@@ -82,6 +72,15 @@ void Manager::tearDownThreadManager(THREADID tid)
 
     threadmanagers.erase(it);
     unlock();
+}
+
+void Manager::storeAllocation(THREADID tid, AllocData data)
+{
+    lock();
+    ThreadManager& manager = threadmanagers[tid];
+    unlock();
+
+    manager.storeAllocation(data);
 }
 
 void Manager::loadTags(const string &file)
@@ -279,6 +278,7 @@ void Manager::loadTagInstructionIdMap()
 
 void Manager::writeRedZone()
 {
+    redZone.ref.genId();
     redZone.ref.allocator = -1;
     redZone.ref.deallocator = -1;
     redZone.ref.type = ReferenceType::RedZone;

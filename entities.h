@@ -208,10 +208,8 @@ enum class ReferenceType {
     Unknown = 7
   };
 
-class Reference {
+class Reference : public EntityWithGeneratedId {
 public:
-    int id;
-
     std::string name;
     int size;
     ReferenceType type;

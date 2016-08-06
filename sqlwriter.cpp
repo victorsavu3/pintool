@@ -57,7 +57,7 @@ void SQLWriter::prepareStatements()
     insertInstructionTagInstanceStmt = this->db->makeStatement("INSERT INTO InstructionTagInstance(Instruction, TagInstance) VALUES(?, ?);");
     insertCallTagInstanceStmt = this->db->makeStatement("INSERT INTO CallTagInstance(Call, TagInstance) VALUES(?, ?);");
     insertAccessStmt = this->db->makeStatement("INSERT INTO Access(Instruction, Position, Address, Size, Type, Reference) VALUES(?, ?, ?, ?, ?, ?);");
-    insertReferenceStmt = this->db->makeStatement("INSERT INTO Reference(Name, Size, Allocator, Deallocator, Type) VALUES(?, ?, ?, ?, ?);");
+    insertReferenceStmt = this->db->makeStatement("INSERT INTO Reference(Id, Name, Size, Allocator, Deallocator, Type) VALUES(?, ?, ?, ?, ?, ?);");
     insertConflictStmt = this->db->makeStatement("INSERT INTO Conflict(TagInstance1, TagInstance2, Access1, Access2) VALUES(?, ?, ?, ?)");
 
     insertTagHitStmt = this->db->makeStatement("INSERT INTO TagHit(TSC, TagInstruction, Thread) VALUES(?, ?, ?);");
@@ -262,26 +262,26 @@ void SQLWriter::insertAccess(Access & access)
     unlock();
 }
 
-void SQLWriter::insertReference(Reference & reference)
+void SQLWriter::insertReference(const Reference &reference)
 {
     lock();
 
     if (reference.allocator > 0) {
         if (reference.deallocator > 0) {
-            insertReferenceStmt << reference.name << reference.size << reference.allocator << reference.deallocator << static_cast<int>(reference.type);
+            insertReferenceStmt << reference.id << reference.name << reference.size << reference.allocator << reference.deallocator << static_cast<int>(reference.type);
         } else {
-            insertReferenceStmt << reference.name << reference.size << reference.allocator << SQLite::SQLNULL << static_cast<int>(reference.type);
+            insertReferenceStmt << reference.id << reference.name << reference.size << reference.allocator << SQLite::SQLNULL << static_cast<int>(reference.type);
         }
 
     } else {
         if (reference.deallocator > 0) {
-            insertReferenceStmt << reference.name << reference.size << SQLite::SQLNULL << reference.deallocator << static_cast<int>(reference.type);
+            insertReferenceStmt << reference.id << reference.name << reference.size << SQLite::SQLNULL << reference.deallocator << static_cast<int>(reference.type);
         } else {
-            insertReferenceStmt << reference.name << reference.size << SQLite::SQLNULL << SQLite::SQLNULL << static_cast<int>(reference.type);
+            insertReferenceStmt << reference.id << reference.name << reference.size << SQLite::SQLNULL << SQLite::SQLNULL << static_cast<int>(reference.type);
         }
     }
 
-    reference.id = insertReferenceStmt->executeInsert();
+    insertReferenceStmt->execute();
 
     unlock();
 }

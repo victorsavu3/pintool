@@ -13,7 +13,6 @@ ThreadManager::ThreadManager(Manager *manager, THREADID tid) : manager(manager),
     clock_gettime(CLOCK_REALTIME, &self.startTime);
 
     self.genId();
-    inAlloc = false;
 
     processAccesses = false;
     processCalls = false;
@@ -66,40 +65,37 @@ void ThreadManager::threadStopped()
 
 void ThreadManager::handleEntry(BufferEntry * entry)
 {
-    if (inAlloc) {
-        handleAfterAlloc();
-    }
-
     switch (entry->type)
     {
     case BuferEntryType::Tag:
+        checkAllocation(entry->data.tag.tsc);
         handleTag(entry->data.tag.tsc - this->startTSC, entry->data.tag.tagId, entry->data.tag.address);
         break;
     case BuferEntryType::Call:
+        checkAllocation(entry->data.callInstruction.tsc);
         if (processCallsComputed)
             handleLocation(manager->locationDetails[entry->data.callInstruction.location]);
         if (processCallsComputed)
             handleCall(entry->data.callInstruction.tsc - this->startTSC, (int)entry->data.callInstruction.location, entry->data.callInstruction.rsp);
         break;
     case BuferEntryType::CallEnter:
+        checkAllocation(entry->data.callEnter.tsc);
         if (processCallsComputed)
             handleCallEnter(entry->data.callEnter.tsc - this->startTSC, entry->data.callEnter.functionId, entry->data.callEnter.rbp, entry->data.callEnter.rsp);
         break;
     case BuferEntryType::Ret:
+        checkAllocation(entry->data.ret.tsc);
         if (processCallsComputed)
             handleRet(entry->data.ret.tsc - this->startTSC, entry->data.ret.functionId, entry->data.ret.rsp);
         break;
     case BuferEntryType::MemRef:
-        if (processCallsComputed)
+        /*if (processCallsComputed)
             handleLocation(manager->locationDetails[((AccessInstructionDetails*)entry->data.memref.accessDetails)->location]);
+            */
+
+        checkAllocation(entry->data.memref.tsc);
         if (processAccessesComputed)
             handleMemRef((AccessInstructionDetails*)entry->data.memref.accessDetails, entry->data.memref.addresses, entry->data.memref.rsp);
-        break;
-    case BuferEntryType::AllocEnter:
-        handleAllocEnter(entry->data.allocenter);
-        break;
-    case BuferEntryType::Free:
-        handleFree(entry->data.free.ref);
         break;
     default:
         CorruptedBufferException("Invalid entry type");
@@ -219,7 +215,6 @@ void ThreadManager::handleCallEnter(UINT64 tsc, int functionId, UINT64 rbp, UINT
     s.call = c.id;
     s.type = SegmentType::Standard;
     manager->writer.insertSegment(s);
-
     callStack.push_back({c, s.id, rbp, rsp});
 
     std::set<int>& callTagInstances = callStack.back().tagInstances;
@@ -270,6 +265,38 @@ void ThreadManager::handleLocation(const LocationDetails& location)
         return;
 }
 
+void ThreadManager::checkAllocation(UINT64 tsc)
+{
+    while (!allocations.empty() && allocations.front().tsc < tsc) {
+        if (callStack.empty()) {
+            allocations.pop_front();
+            continue;
+        }
+
+        AllocData data = allocations.front();
+
+        switch(data.type)
+        {
+        case AllocType::malloc:
+            handleMalloc(data.address, data.malloc.size);
+            break;
+        case AllocType::calloc:
+            handleCalloc(data.address, data.calloc.num, data.calloc.size);
+            break;
+        case AllocType::realloc:
+            handleRealloc(data.address, data.realloc.ref, data.realloc.size);
+            break;
+        case AllocType::free:
+            handleFree(data.address);
+            break;
+        default:
+            CorruptedBufferException("Invalid allocation type");
+        }
+
+        allocations.pop_front();
+    }
+}
+
 void ThreadManager::handleFree(ADDRINT address)
 {
     manager->lockReferences();
@@ -291,8 +318,8 @@ void ThreadManager::handleFree(ADDRINT address)
 
         instr.type = InstructionType::Free;
         instr.segment = callStack.back().segment;
-        instr.line = -1;
-        instr.column = -1;
+        instr.line = manager->locationDetails[lastCallLocation].line;
+        instr.column = manager->locationDetails[lastCallLocation].line;
 
         manager->writer.insertInstruction(instr);
         insertCurrentTagInstances(instr.id);
@@ -309,72 +336,10 @@ void ThreadManager::handleFree(ADDRINT address)
     manager->unlockReferences();
 }
 
-void ThreadManager::handleAfterAlloc()
-{
-    ADDRINT address;
-
-    manager->lockKnownAllocations();
-
-    auto it = manager->knownAllocations.find(alloc);
-
-    if (it == manager->knownAllocations.end() || it->second.empty()) {
-        //CorruptedBufferException("Allocation return value not found");
-        manager->unlockKnownAllocations();
-        return;
-    }
-
-    auto next = it->second.lower_bound(alloc.tsc);
-    auto rem = next;
-
-    if (next == it->second.end()) {
-        rem = it->second.end();
-        rem--;
-    } else {
-        if (next->first != alloc.tsc) {
-            next--;
-
-            if (next != it->second.end()) {
-                INT64 d1 = abs(next->first - alloc.tsc);
-                INT64 d2 = abs(rem->first - alloc.tsc);
-
-                if (d1 < d2) {
-                    rem = next;
-                }
-            }
-        }
-    }
-
-    address = rem->second;
-    it->second.erase(rem);
-
-    manager->unlockKnownAllocations();
-
-    switch(alloc.type) {
-    case AllocEntryType::malloc:
-        handleMalloc(address, alloc.size);
-        break;
-    case AllocEntryType::calloc:
-        handleCalloc(address, alloc.num, alloc.size);
-        break;
-    case AllocEntryType::realloc:
-        handleRealloc(address, alloc.ref, alloc.size);
-        break;
-    default:
-        CorruptedBufferException("Invalid allocation type");
-    }
-
-    inAlloc = false;
-}
-
-void ThreadManager::handleAllocEnter(AllocEnterBufferEntry entry)
-{
-    alloc = entry;
-    inAlloc = true;
-}
-
 void ThreadManager::handleMalloc(ADDRINT address, UINT64 size)
 {
     ReferenceData data;
+    data.ref.genId();
     data.ref.size = size;
     data.ref.type = ReferenceType::Heap;
 
@@ -387,8 +352,8 @@ void ThreadManager::handleMalloc(ADDRINT address, UINT64 size)
 
         instr.type = InstructionType::Alloc;
         instr.segment = callStack.back().segment;
-        instr.line = -1;
-        instr.column = -1;
+        instr.line = manager->locationDetails[lastCallLocation].line;
+        instr.column = manager->locationDetails[lastCallLocation].line;
 
         manager->writer.insertInstruction(instr);
         insertCurrentTagInstances(instr.id);
@@ -398,10 +363,12 @@ void ThreadManager::handleMalloc(ADDRINT address, UINT64 size)
         data.ref.allocator = -1;
     }
 
-    // if (references.find(address) != references.end())
+    manager->lockReferences();
+
+    // calloc calls malloc
+    // if (manager->references.find(address) != manager->references.end())
     //     CorruptedBufferException("Address reused by allocation");
 
-    manager->lockReferences();
     manager->references.insert(std::make_pair(address, data));
     manager->unlockReferences();
 }
@@ -421,25 +388,25 @@ void ThreadManager::clearStackReferences(ADDRINT from, ADDRINT rsp)
 {
     manager->lockReferences();
 
-    auto it = manager->references.lower_bound(from);
+    auto it = manager->references.lower_bound(rsp);
 
     if (it == manager->references.end()) {
         manager->unlockReferences();
         return;
     }
 
-    auto itEnd = it;
-    auto itStart = manager->references.end();
+    auto itStart = it;
+    auto itEnd = manager->references.end();
 
-    while (it != manager->references.end() && it->first <= rsp) {
+    while (it != manager->references.end() && it->first <= from) {
         if (it->second.ref.type != ReferenceType::Stack && it->second.ref.type != ReferenceType::Parameter)
             break;
 
-        itStart = it;
-        it--;
+        itEnd = it;
+        it++;
     }
 
-    if (itStart == manager->references.end()) {
+    if (itEnd == manager->references.end()) {
         manager->unlockReferences();
         return;
     }
@@ -447,6 +414,15 @@ void ThreadManager::clearStackReferences(ADDRINT from, ADDRINT rsp)
     manager->references.erase(itStart, itEnd);
 
     manager->unlockReferences();
+}
+
+void ThreadManager::storeAllocation(AllocData allocation)
+{
+    lock();
+
+    allocations.push_back(allocation);
+
+    unlock();
 }
 
 ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp)
@@ -471,10 +447,10 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
 
     if (!callStack.empty()) {
         ADDRINT rbp = callStack.back().rbp;
-        ADDRINT rsp = rsp;
 
         if (address < rbp && address >= rsp) { // Most common case, stack variable for the last function
             ReferenceData data;
+            data.ref.genId();
             data.ref.size = size;
             data.ref.type = ReferenceType::Stack;
             data.ref.allocator = -1;
@@ -491,8 +467,9 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
             return manager->redZone;
         } else if (address < callStack.front().rbp && address >= rsp){ // We are in the stack
             for (auto it = callStack.rbegin(); it != callStack.rend(); it++) {
-                if (address > it->rbp && address <= it->rsp) { // Stack variables between rbp and rsp of a parent
+                if (address < it->rbp && address >= it->rsp) { // Stack variables between rbp and rsp of a parent
                     ReferenceData data;
+                    data.ref.genId();
                     data.ref.size = size;
                     data.ref.type = ReferenceType::Stack;
                     data.ref.allocator = -1;
@@ -505,8 +482,9 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
                     manager->writer.insertReference(data.ref);
 
                     return manager->references.insert(std::make_pair(address, data)).first->second;
-                } else if (address <= it->rbp && address <= it->rsp) { // Arguments above rbp
+                } else if (address >= it->rbp) { // Arguments above rbp
                     ReferenceData data;
+                    data.ref.genId();
                     data.ref.size = size;
                     data.ref.type = ReferenceType::Parameter;
                     data.ref.allocator = -1;
@@ -525,6 +503,7 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
     }
 
     ReferenceData data;
+    data.ref.genId();
     data.ref.size = size;
     data.ref.type = ReferenceType::Global;
     data.ref.allocator = -1;

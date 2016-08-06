@@ -2,6 +2,7 @@
 #define THREADMANAGER_H
 
 #include <list>
+#include <deque>
 
 #include <pin.H>
 
@@ -18,6 +19,7 @@ public:
     ~ThreadManager();
 
     void bufferFull(struct BufferEntry*, UINT64);
+    void storeAllocation(AllocData allocation);
     void threadStopped();
 private:
     Manager* manager;
@@ -34,16 +36,12 @@ private:
     void handleRet(UINT64 tsc, int functionId, UINT64 rsp);
     void handleLocation(const LocationDetails &location);
 
+    void checkAllocation(UINT64 tsc);
     void handleFree(ADDRINT address);
-    void handleAfterAlloc();
-    void handleAllocEnter(AllocEnterBufferEntry entry);
     void handleMalloc(ADDRINT address, UINT64 size);
     void handleCalloc(ADDRINT address, UINT64 num, UINT64 size);
     void handleRealloc(ADDRINT address, ADDRINT old, UINT64 size);
     void clearStackReferences(ADDRINT from, ADDRINT rsp);
-
-    bool inAlloc;
-    AllocEnterBufferEntry alloc;
 
     struct CallData {
           Call call;
@@ -56,6 +54,8 @@ private:
     std::list<CallData> callStack;
     UINT64 lastCallTSC;
     int lastCallLocation;
+
+    std::deque<AllocData> allocations; // allocated by malloc and friends tsc -> AllocationData
 
     ReferenceData& getReference(ADDRINT address, int size, UINT64 rsp);
     void handleMemRef(AccessInstructionDetails* details, ADDRINT addresses[7], UINT64 rsp);

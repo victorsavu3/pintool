@@ -12,9 +12,7 @@ enum class BuferEntryType : UINT32
     Call,
     Ret,
     Tag,
-    MemRef,
-    AllocEnter,
-    Free
+    MemRef
 };
 
 struct CallInstructionBufferEntry
@@ -51,68 +49,37 @@ struct AccessInstructionBufferEntry
     ADDRINT accessDetails;
     ADDRINT addresses[7];
     UINT64 rsp;
+    UINT64 tsc;
 };
 
-enum class AllocEntryType : UINT32
+enum class AllocType : UINT32
 {
     malloc = 1,
     calloc,
-    realloc
+    realloc,
+    free
 };
 
-struct AllocEnterBufferEntry
-{
-    AllocEntryType type;
+struct AllocData {
+    AllocType type;
     UINT64 tsc;
-    THREADID thread;
+    ADDRINT address;
 
-    UINT64 num;
-    UINT64 size;
-    ADDRINT ref;
-};
+    union {
+        struct {
+            size_t size;
+        } malloc;
 
-inline bool operator==(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
-{
-    if (lhs.type != rhs.type)
-        return false;
+        struct {
+            size_t size;
+            size_t num;
+        } calloc;
 
-    switch(lhs.type) {
-        case AllocEntryType::malloc:
-            return std::tie(lhs.size, lhs.thread) == std::tie(rhs.size, rhs.thread);
-        case AllocEntryType::calloc:
-            return std::tie(lhs.size, rhs.num, lhs.thread) == std::tie(rhs.size, rhs.num, rhs.thread);
-        case AllocEntryType::realloc:
-            return std::tie(lhs.size, lhs.ref, lhs.thread) == std::tie(rhs.size, rhs.ref, rhs.thread);
-        default:
-            CorruptedBufferException("Invalid AllocEntryType");
-    }
-}
-
-inline bool operator!=(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
-{
-    return !(lhs == rhs);
-}
-
-inline bool operator<(const AllocEnterBufferEntry & lhs, const AllocEnterBufferEntry & rhs )
-{
-    if (lhs.type >= rhs.type)
-        return false;
-
-    switch(lhs.type) {
-    case AllocEntryType::malloc:
-        return std::tie(lhs.size, lhs.thread) < std::tie(rhs.size, rhs.thread);
-    case AllocEntryType::calloc:
-        return std::tie(lhs.size, rhs.num, lhs.thread) < std::tie(rhs.size, rhs.num, rhs.thread);
-    case AllocEntryType::realloc:
-        return std::tie(lhs.size, lhs.ref, lhs.thread) < std::tie(rhs.size, rhs.ref, rhs.thread);
-    default:
-        CorruptedBufferException("Invalid AllocEntryType");
-    }
-}
-
-struct FreeBufferEntry
-{
-    ADDRINT ref;
+        struct {
+            size_t size;
+            ADDRINT ref;
+        } realloc;
+    };
 };
 
 union BufferEntryUnion
@@ -122,8 +89,6 @@ union BufferEntryUnion
     RetBufferEntry ret;
     TagBufferEntry tag;
     AccessInstructionBufferEntry memref;
-    AllocEnterBufferEntry allocenter;
-    FreeBufferEntry free;
 };
 
 struct BufferEntry

@@ -23,118 +23,126 @@ KNOB<string> KnobFilterFile(KNOB_MODE_WRITEONCE, "pintool",
 BUFFER_ID bufId;
 
 
-VOID MallocEnter(ADDRINT d, UINT64 size, UINT64 tsc, THREADID tid)
+void ReplacedFree(ADDRINT d, const CONTEXT* ctx, AFUNPTR mallocPtr, UINT64 tsc, THREADID tid, ADDRINT address)
 {
     Manager* manager = (Manager*)d;
 
-    AllocEnterBufferEntry entry;
+    AllocData data;
 
-    entry.type = AllocEntryType::malloc;
-    entry.size = size;
-    entry.tsc = tsc;
-    entry.thread = tid;
+    data.type = AllocType::free;
+    data.tsc = tsc;
+    data.address = address;
 
-    manager->lockKnownAllocations();
+    CALL_APPLICATION_FUNCTION_PARAM param;
+    memset(&param, 0, sizeof(param));
+    param.native = 1;
 
-    manager->knownAllocationsInProgess.insert(std::make_pair(tid, entry));
+    PIN_CallApplicationFunction(ctx, tid, CALLINGSTD_DEFAULT, mallocPtr, &param, PIN_PARG(void), PIN_PARG(ADDRINT), address, PIN_PARG_END());
 
-    manager->unlockKnownAllocations();
+    manager->storeAllocation(tid, data);
+
+    return;
 }
 
-VOID CallocEnter(ADDRINT d, UINT64 num, UINT64 size, UINT64 tsc, THREADID tid)
+void* ReplacedMalloc(ADDRINT d, const CONTEXT* ctx, AFUNPTR mallocPtr, UINT64 tsc, THREADID tid, UINT64 size)
 {
     Manager* manager = (Manager*)d;
 
-    AllocEnterBufferEntry entry;
+    AllocData data;
 
-    entry.type = AllocEntryType::calloc;
-    entry.size = size;
-    entry.num = num;
-    entry.tsc = tsc;
-    entry.thread = tid;
+    data.type = AllocType::malloc;
+    data.malloc.size = size;
+    data.tsc = tsc;
 
-    manager->lockKnownAllocations();
+    CALL_APPLICATION_FUNCTION_PARAM param;
+    memset(&param, 0, sizeof(param));
+    param.native = 1;
+    ADDRINT ret;
 
-    manager->knownAllocationsInProgess.insert(std::make_pair(tid, entry));
+    PIN_CallApplicationFunction(ctx, tid, CALLINGSTD_DEFAULT, mallocPtr, &param, PIN_PARG(ADDRINT), &ret, PIN_PARG(UINT64), size, PIN_PARG_END());
 
-    manager->unlockKnownAllocations();
+    data.address = ret;
+
+    manager->storeAllocation(tid, data);
+
+    return (void*)ret;
 }
 
-VOID ReallocEnter(ADDRINT d, ADDRINT ref, UINT64 size, UINT64 tsc, THREADID tid)
+void* ReplacedCalloc(ADDRINT d, const CONTEXT* ctx, AFUNPTR callocPtr, UINT64 tsc, THREADID tid, UINT64 num, UINT64 size)
 {
     Manager* manager = (Manager*)d;
 
-    AllocEnterBufferEntry entry;
+    AllocData data;
 
-    entry.type = AllocEntryType::realloc;
-    entry.size = size;
-    entry.ref = ref;
-    entry.tsc = tsc;
-    entry.thread = tid;
+    data.type = AllocType::calloc;
+    data.calloc.size = size;
+    data.calloc.num = num;
+    data.tsc = tsc;
 
-    manager->lockKnownAllocations();
+    CALL_APPLICATION_FUNCTION_PARAM param;
+    memset(&param, 0, sizeof(param));
+    param.native = 1;
+    ADDRINT ret;
 
-    manager->knownAllocationsInProgess.insert(std::make_pair(tid, entry));
+    PIN_CallApplicationFunction(ctx, tid, CALLINGSTD_DEFAULT, callocPtr, &param, PIN_PARG(ADDRINT), &ret, PIN_PARG(UINT64), num, PIN_PARG(UINT64), size, PIN_PARG_END());
 
-    manager->unlockKnownAllocations();
+    data.address = ret;
+
+    manager->storeAllocation(tid, data);
+
+    return (void*)ret;
 }
 
-VOID AllocExit(ADDRINT d, ADDRINT ref, THREADID tid)
+void* ReplacedRealloc(ADDRINT d, const CONTEXT* ctx, AFUNPTR reallocPtr, UINT64 tsc, THREADID tid, ADDRINT ref, UINT64 size)
 {
     Manager* manager = (Manager*)d;
 
-    manager->lockKnownAllocations();
+    AllocData data;
 
-    auto it = manager->knownAllocationsInProgess.find(tid);
+    data.type = AllocType::realloc;
+    data.realloc.size = size;
+    data.realloc.ref = ref;
+    data.tsc = tsc;
 
-    if (it == manager->knownAllocationsInProgess.end()) {
-        manager->unlockKnownAllocations();
-        return;
-    }
-    auto knownIt = manager->knownAllocations.find(it->second);
+    CALL_APPLICATION_FUNCTION_PARAM param;
+    memset(&param, 0, sizeof(param));
+    param.native = 1;
+    ADDRINT ret;
 
-    if (knownIt == manager->knownAllocations.end()) {
-        std::map<UINT64, ADDRINT> map;
+    PIN_CallApplicationFunction(ctx, tid, CALLINGSTD_DEFAULT, reallocPtr, &param, PIN_PARG(ADDRINT), &ret, PIN_PARG(void*), ref, PIN_PARG(UINT64), size, PIN_PARG_END());
 
-        map.insert(std::make_pair(it->second.tsc, ref));
+    data.address = ret;
 
-        manager->knownAllocations.insert(std::make_pair(it->second, map));
-    } else {
-        knownIt->second.insert(std::make_pair(it->second.tsc, ref));
-    }
+    manager->storeAllocation(tid, data);
 
-    manager->knownAllocationsInProgess.erase(it);
-
-    manager->unlockKnownAllocations();
+    return (void*)ret;
 }
 
-void processAlloc(Manager* manager, RTN rtn, AllocEntryType type) {
+void processAlloc(Manager* manager, RTN rtn, AllocType type) {
 
-    RTN_Open(rtn);
-
-    INS ins = RTN_InsHeadOnly(rtn);
-    ADDRINT address = INS_Address(ins);
-
-    manager->allocEnterAddresesToInstrument.insert(std::make_pair(address, type));
+    //RTN_Open(rtn);
 
     switch(type) {
-    case AllocEntryType::malloc:
-        RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)MallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_TSC, IARG_THREAD_ID, IARG_END);
+    case AllocType::malloc:
+        RTN_ReplaceSignature(rtn, (AFUNPTR)ReplacedMalloc, IARG_ADDRINT, (ADDRINT)manager, IARG_CONST_CONTEXT, IARG_ORIG_FUNCPTR, IARG_TSC, IARG_THREAD_ID, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_END);
+        //RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)MallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_TSC, IARG_THREAD_ID, IARG_END);
         break;
-    case AllocEntryType::calloc:
-        RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)CallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_TSC, IARG_THREAD_ID, IARG_END);
+    case AllocType::calloc:
+        RTN_ReplaceSignature(rtn, (AFUNPTR)ReplacedCalloc, IARG_ADDRINT, (ADDRINT)manager, IARG_CONST_CONTEXT, IARG_ORIG_FUNCPTR, IARG_TSC, IARG_THREAD_ID, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_END);
+        //RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)CallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_TSC, IARG_THREAD_ID, IARG_END);
         break;
-    case AllocEntryType::realloc:
-        RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)ReallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_TSC, IARG_THREAD_ID, IARG_END);
+    case AllocType::realloc:
+        RTN_ReplaceSignature(rtn, (AFUNPTR)ReplacedRealloc, IARG_ADDRINT, (ADDRINT)manager, IARG_CONST_CONTEXT, IARG_ORIG_FUNCPTR, IARG_TSC, IARG_THREAD_ID, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_END);
+        //RTN_InsertCall( rtn, IPOINT_BEFORE, (AFUNPTR)ReallocEnter, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_FUNCARG_ENTRYPOINT_VALUE, 1, IARG_TSC, IARG_THREAD_ID, IARG_END);
+        break;
+    case AllocType::free:
+        RTN_ReplaceSignature(rtn, (AFUNPTR)ReplacedFree, IARG_ADDRINT, (ADDRINT)manager, IARG_CONST_CONTEXT, IARG_ORIG_FUNCPTR, IARG_TSC, IARG_THREAD_ID, IARG_FUNCARG_ENTRYPOINT_VALUE, 0, IARG_END);
         break;
     default:
         CorruptedBufferException("Invalid allocation type");
     }
 
-
-    RTN_InsertCall( rtn, IPOINT_AFTER, (AFUNPTR)AllocExit, IARG_ADDRINT, (ADDRINT)manager, IARG_FUNCRET_EXITPOINT_VALUE, IARG_THREAD_ID, IARG_END);
-
-    RTN_Close(rtn);
+    //RTN_Close(rtn);
 }
 
 VOID ImageLoad(IMG img, VOID *v)
@@ -147,32 +155,25 @@ VOID ImageLoad(IMG img, VOID *v)
     RTN freeRtn = RTN_FindByName(img, "free");
     if (RTN_Valid(freeRtn))
     {
-        RTN_Open(freeRtn);
-
-        INS ins = RTN_InsHeadOnly(freeRtn);
-        ADDRINT address = INS_Address(ins);
-
-        manager->freeEnterAddresesToInstrument.insert(address);
-
-        RTN_Close(freeRtn);
+       processAlloc(manager, freeRtn, AllocType::free);
     }
 
     RTN mallocRtn = RTN_FindByName(img, "malloc");
     if (RTN_Valid(mallocRtn))
     {
-        processAlloc(manager, mallocRtn, AllocEntryType::malloc);
+        processAlloc(manager, mallocRtn, AllocType::malloc);
     }
 
     RTN callocRtn = RTN_FindByName(img, "calloc");
     if (RTN_Valid(callocRtn))
     {
-        processAlloc(manager, callocRtn, AllocEntryType::calloc);
+        processAlloc(manager, callocRtn, AllocType::calloc);
     }
 
     RTN reallocRtn = RTN_FindByName(img, "realloc");
     if (RTN_Valid(reallocRtn))
     {
-        processAlloc(manager, reallocRtn, AllocEntryType::realloc);
+        processAlloc(manager, reallocRtn, AllocType::realloc);
     }
 
     INT32 column;
@@ -326,63 +327,6 @@ VOID Trace(TRACE trace, VOID *v)
             ADDRINT address = INS_Address(ins);
 
             {
-                auto it = manager->freeEnterAddresesToInstrument.find(address);
-
-                if (it != manager->freeEnterAddresesToInstrument.end())
-                {
-                    INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                                         IARG_UINT32, static_cast<UINT32>(BuferEntryType::Free), offsetof(struct BufferEntry, type),
-                                         IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct FreeBufferEntry, ref),
-                                         IARG_END);
-
-                    continue;
-                }
-            }
-
-            {
-                auto it = manager->allocEnterAddresesToInstrument.find(address);
-
-                if (it != manager->allocEnterAddresesToInstrument.end())
-                {
-                    switch(it->second) {
-                    case AllocEntryType::malloc:
-                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
-                                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
-                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, tsc),
-                                             IARG_THREAD_ID, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, thread),
-                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
-                                             IARG_END);
-                        break;
-                    case AllocEntryType::calloc:
-                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
-                                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
-                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, tsc),
-                                             IARG_THREAD_ID, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, thread),
-                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, num),
-                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
-                                             IARG_END);
-                        break;
-                    case AllocEntryType::realloc:
-                        INS_InsertFillBuffer(ins, IPOINT_BEFORE, bufId,
-                                             IARG_UINT32, static_cast<UINT32>(BuferEntryType::AllocEnter), offsetof(struct BufferEntry, type),
-                                             IARG_UINT32, static_cast<UINT32>(it->second), offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, type),
-                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, tsc),
-                                             IARG_THREAD_ID, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, thread),
-                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 0, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, ref),
-                                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1, offsetof(struct BufferEntry, data) + offsetof(struct AllocEnterBufferEntry, size),
-                                             IARG_END);
-                        break;
-                    default:
-                        UnimplementedException("Unknown allocator type");
-                    }
-
-                    continue;
-                }
-            }
-
-            {
                 auto it = manager->tagAddressesToInstrument.find(address);
 
                 if (it != manager->tagAddressesToInstrument.end())
@@ -454,6 +398,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_END);
                         break;
@@ -462,6 +407,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
                                              IARG_END);
@@ -471,6 +417,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
@@ -481,6 +428,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
@@ -492,6 +440,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
@@ -504,6 +453,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),
@@ -517,6 +467,7 @@ VOID Trace(TRACE trace, VOID *v)
                                              IARG_UINT32, static_cast<UINT32>(BuferEntryType::MemRef), offsetof(struct BufferEntry, type),
                                              IARG_REG_VALUE, REG_RSP, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, rsp),
                                              IARG_ADDRINT, (ADDRINT)detailPtr, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, accessDetails),
+                                             IARG_TSC, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, tsc),
                                              IARG_MEMORYOP_EA, 0, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 0 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 1, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 1 * sizeof(ADDRINT),
                                              IARG_MEMORYOP_EA, 2, offsetof(struct BufferEntry, data) + offsetof(struct AccessInstructionBufferEntry, addresses) + 2 * sizeof(ADDRINT),

@@ -67,13 +67,6 @@ public:
     std::map<ADDRINT, CallEnterBufferEntry> callAddressesToInstrument;
     std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
     std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
-    std::set<ADDRINT> freeEnterAddresesToInstrument;
-    std::map<ADDRINT, AllocEntryType> allocEnterAddresesToInstrument;
-
-    std::map<THREADID, AllocEnterBufferEntry> knownAllocationsInProgess;
-    std::map<AllocEnterBufferEntry, std::map<UINT64, ADDRINT> > knownAllocations;
-    void lockKnownAllocations();
-    void unlockKnownAllocations();
 
     std::map<ADDRINT, ReferenceData> references;
     ReferenceData redZone;
@@ -96,6 +89,8 @@ public:
 
     void setUpThreadManager(THREADID);
     void tearDownThreadManager(THREADID);
+
+    void storeAllocation(THREADID tid, AllocData data);
 
     void lock();
     void unlock();
