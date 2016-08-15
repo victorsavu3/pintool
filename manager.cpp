@@ -239,6 +239,35 @@ void Manager::loadTags(const string &file)
 
         processCallsByDefault = processCallsByDefaultFlag.as<bool>();
     }
+
+    YAML::Node ignore = filter["ignore"];
+
+    if (ignore)
+    {
+        if(!ignore.IsSequence())
+            YAMLException(file, "ignore should be a sequence");
+
+        size_t i;
+
+        for(i = 0; i< ignore.size(); i++)
+        {
+            auto el = ignore[i];
+
+            if(!el.IsMap())
+                YAMLException(file, "ignore should be a sequence of maps");
+
+            auto elfct = el["function"];
+            auto eldelta = el["delta"];
+
+            if(!elfct.IsScalar())
+                YAMLException(file, "ignore element function should be a scalar");
+
+            if(!eldelta.IsScalar())
+                YAMLException(file, "ignore element delta should be a scalar");
+
+            ignoreConflict[elfct.as<int>()].insert(eldelta.as<int>());
+        }
+    }
 }
 
 void Manager::writeTags()

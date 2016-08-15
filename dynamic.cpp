@@ -288,6 +288,7 @@ VOID ImageLoad(IMG img, VOID *v)
 
                             opDetail.size = INS_MemoryOperandSize(ins, memOp);
                             opDetail.isRead = INS_MemoryOperandIsRead(ins, memOp);
+                            opDetail.isWrite = INS_MemoryOperandIsWritten(ins, memOp);
 
                             entry.accesses.push_back(opDetail);
                         }

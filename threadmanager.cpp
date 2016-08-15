@@ -268,10 +268,10 @@ void ThreadManager::handleLocation(const LocationDetails& location)
 void ThreadManager::checkAllocation(UINT64 tsc)
 {
     while (!allocations.empty() && allocations.front().tsc < tsc) {
-        if (callStack.empty()) {
+        /*if (callStack.empty()) {
             allocations.pop_front();
             continue;
-        }
+        }*/
 
         AllocData data = allocations.front();
 
@@ -457,8 +457,11 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
             data.ref.deallocator = -1;
 
             std::stringstream stream;
-            stream << "S: " << std::hex << (ADDRDELTA)rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)rbp) << ':' << callStack.back().call.function;
+            stream << "S: " << std::hex << (ADDRDELTA)address << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)rbp) << ':' << callStack.back().call.function;
             data.ref.name = stream.str();
+            data.isStack = true;
+            data.stackDelta = (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)rbp);
+            data.stackFctAlloc = callStack.back().call.function;
 
             manager->writer.insertReference(data.ref);
 
@@ -476,8 +479,11 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
                     data.ref.deallocator = -1;
 
                     std::stringstream stream;
-                    stream << "S: " << std::hex << (ADDRDELTA)it->rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp) << ':' << it->call.function;
+                    stream << "S: " << std::hex << (ADDRDELTA)address << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp) << ':' << it->call.function;
                     data.ref.name = stream.str();
+                    data.isStack = true;
+                    data.stackDelta = (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp);
+                    data.stackFctAlloc = it->call.function;
 
                     manager->writer.insertReference(data.ref);
 
@@ -491,8 +497,11 @@ ReferenceData &ThreadManager::getReference(ADDRINT address, int size, UINT64 rsp
                     data.ref.deallocator = -1;
 
                     std::stringstream stream;
-                    stream << "P: " << std::hex << (ADDRDELTA)it->rbp << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp) << ':' << it->call.function;
+                    stream << "P: " << std::hex << (ADDRDELTA)address << ':' << std::dec << (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp) << ':' << it->call.function;
                     data.ref.name = stream.str();
+                    data.isStack = true;
+                    data.stackDelta = (ADDRDELTA) ((ADDRDELTA)address - (ADDRDELTA)it->rbp);
+                    data.stackFctAlloc = it->call.function;
 
                     manager->writer.insertReference(data.ref);
 
@@ -535,14 +544,20 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
 
     for (int i=0;i < details->accesses.size(); i++) {
         Access a;
+
+        ReferenceData* data;
+
         int refid;
         {
             manager->lockReferences();
 
-            ReferenceData& data = getReference(addresses[i], details->accesses[i].size, rsp);
-            data.wasAccessed = true;
+            data = &getReference(addresses[i], details->accesses[i].size, rsp);
+            data->wasAccessed = true;
 
-            refid = data.ref.id;
+            refid = data->ref.id;
+
+            if (!data->isStack)
+                data = NULL;
 
             manager->unlockReferences();
         }
@@ -552,16 +567,34 @@ void ThreadManager::handleMemRef(AccessInstructionDetails* details, ADDRINT addr
         a.position = i;
         a.address = addresses[i];
         a.size = details->accesses[i].size;
-        if (details->accesses[i].isRead) {
+
+            if (details->accesses[i].isRead) {
             a.type = AccessType::Read;
-        } else {
-            a.type = AccessType::Write;
+
+            manager->writer.insertAccess(a);
+
+            if (refid != manager->redZone.ref.id)
+            {
+                for (auto& it: currentTagInstances) {
+                    recordTagAccess(it, a.address, a.reference, a.id, a.type);
+                }
+            }
         }
 
-        manager->writer.insertAccess(a);
+        if (details->accesses[i].isWrite) {
+            a.type = AccessType::Write;
 
-        for (auto& it: currentTagInstances) {
-            recordTagAccess(it, a.address, a.reference, a.id, a.type);
+            manager->writer.insertAccess(a);
+
+            if (refid != manager->redZone.ref.id) // Ignore red zone
+            {
+                if (data == NULL || manager->ignoreConflict[data->stackFctAlloc].find(data->stackDelta) == manager->ignoreConflict[data->stackFctAlloc].end()) // Ignore specifc variables
+                {
+                    for (auto& it: currentTagInstances) {
+                        recordTagAccess(it, a.address, a.reference, a.id, a.type);
+                    }
+                }
+            }
         }
     }
 }

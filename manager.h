@@ -31,6 +31,7 @@ struct MemoryOperationDetails
     ADDRINT address;
     UINT32 size;
     BOOL isRead;
+    BOOL isWrite;
 };
 
 struct AccessInstructionDetails
@@ -44,8 +45,12 @@ struct ReferenceData {
         wasAccessed = false;
     }
 
-      Reference ref;
-      bool wasAccessed;
+  Reference ref;
+  bool wasAccessed;
+
+  bool isStack;
+  ADDRDELTA stackDelta;
+  int stackFctAlloc;
 };
 
 class Manager
@@ -67,6 +72,8 @@ public:
     std::map<ADDRINT, CallEnterBufferEntry> callAddressesToInstrument;
     std::map<ADDRINT, RetBufferEntry> retAddressesToInstrument;
     std::map<ADDRINT, ADDRINT> callInstructionAddressesToInstrument;
+
+    std::map<int, std::set<ADDRDELTA> > ignoreConflict;
 
     std::map<ADDRINT, ReferenceData> references;
     ReferenceData redZone;
