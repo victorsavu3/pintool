@@ -96,6 +96,8 @@ set(SRC_LIST_SQLTEST sqltest ${SRC_LIST_COMMON})
 add_library(${PROJECT_NAME}_static SHARED ${SRC_LIST_STATIC})
 add_library(${PROJECT_NAME}_dynamic SHARED ${SRC_LIST_DYNAMIC})
 add_library(${PROJECT_NAME}_sqltest SHARED ${SRC_LIST_SQLTEST})
+add_library(${PROJECT_NAME}_pintest SHARED pintest)
+add_library(${PROJECT_NAME}_pintestprobe SHARED pintestprobe)
 
 add_definitions(-DTARGET_IA32E -DHOST_IA32E -DTARGET_LINUX)
 set(CMAKE_CXX_FLAGS "-fPIC -Wl,-Bsymbolic -std=c++11")
@@ -114,3 +116,5 @@ target_link_libraries(${PROJECT_NAME}_sqltest "pin" "pindwarf" "pinvm" "z" "yaml
 
 add_dependencies(${PROJECT_NAME}_dynamic libsqlite)
 target_link_libraries(${PROJECT_NAME}_dynamic "pin" "pindwarf" "pinvm" "z" "yaml-cpp" "dl" "rt")
+target_link_libraries(${PROJECT_NAME}_pintest "pin" "pindwarf" "pinvm" "z" "dl" "rt")
+target_link_libraries(${PROJECT_NAME}_pintestprobe "pin" "pindwarf" "pinvm" "z" "dl" "rt")
